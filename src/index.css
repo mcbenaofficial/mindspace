@@ -1,0 +1,315 @@
+@import "tailwindcss";
+
+/* ─── Design tokens ──────────────────────────────────────────────────────── */
+:root {
+  --ms-bg:         #07091a;
+  --ms-surface:    #0d1028;
+  --ms-surface-2:  #131730;
+  --ms-border:     rgba(255,255,255,0.07);
+  --ms-border-2:   rgba(255,255,255,0.13);
+  --ms-text:       #dde6f8;
+  --ms-text-muted: #3e4a70;
+  --ms-accent:     #4ecfff;
+  --ms-dot:        #0a0c1e;
+
+  /* Elevation shadows */
+  --ms-shadow-sm: 0 2px 8px  rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.6);
+  --ms-shadow-md: 0 4px 24px rgba(0,0,0,0.55), 0 2px 4px rgba(0,0,0,0.7);
+  --ms-shadow-lg: 0 8px 48px rgba(0,0,0,0.65), 0 3px 8px rgba(0,0,0,0.8);
+
+  /* Accent glow — recomputed per theme by applyTheme() */
+  --ms-glow:        0 0 20px rgba(78,207,255,0.22);
+  --ms-glow-strong: 0 0 36px rgba(78,207,255,0.40);
+  --ms-accent-15:   rgba(78,207,255,0.15);
+  --ms-accent-25:   rgba(78,207,255,0.25);
+
+  /* Legacy neumorphic kept for any node that still references them */
+  --nm-light: rgba(44, 50, 80, 0.75);
+  --nm-dark:  rgba(8,  9, 16, 0.95);
+  --nm-raised:    -5px -5px 13px var(--nm-light),  5px  5px 13px var(--nm-dark);
+  --nm-raised-sm: -3px -3px  8px var(--nm-light),  3px  3px  8px var(--nm-dark);
+  --nm-pressed: inset -3px -3px 7px var(--nm-light), inset 3px 3px 7px var(--nm-dark);
+  --nm-flat:    -2px -2px  4px var(--nm-light),  2px  2px  4px var(--nm-dark);
+}
+
+/* ─── Reset ──────────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: transparent;
+  margin: 0; padding: 0;
+}
+
+#root {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: var(--ms-bg);
+  color: var(--ms-text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  border-radius: 16px;
+  clip-path: inset(0 round 16px);
+}
+
+/* ─── Scrollbars ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.10); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.20); }
+
+/* ─── React Flow overrides ───────────────────────────────────────────────── */
+.react-flow__background { background: var(--ms-bg) !important; }
+.react-flow__node { background: transparent !important; }
+
+/* Edges — vibrant glowing connectors */
+.react-flow__edge-path {
+  stroke: var(--ms-accent) !important;
+  stroke-width: 2 !important;
+  opacity: 0.70;
+  filter: drop-shadow(0 0 4px var(--ms-accent-15));
+  transition: opacity 0.15s ease, filter 0.15s ease;
+}
+.react-flow__edge:hover .react-flow__edge-path {
+  opacity: 0.90;
+  filter: drop-shadow(0 0 6px var(--ms-accent-25));
+}
+.react-flow__edge.selected .react-flow__edge-path {
+  opacity: 1;
+  stroke-width: 2.5 !important;
+  filter: drop-shadow(0 0 10px var(--ms-accent-25));
+}
+.react-flow__connection-path {
+  stroke: var(--ms-accent) !important;
+  stroke-width: 2 !important;
+  filter: drop-shadow(0 0 6px var(--ms-accent-25));
+}
+
+/* Handles — circular glowing anchors */
+.react-flow__handle {
+  width: 10px !important;
+  height: 10px !important;
+  background: var(--ms-accent) !important;
+  border: 2px solid var(--ms-bg) !important;
+  border-radius: 50% !important;
+  opacity: 0;
+  transition: opacity 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.react-flow__node:hover .react-flow__handle,
+.react-flow__node.selected .react-flow__handle { opacity: 1; }
+.react-flow__handle:hover {
+  box-shadow: 0 0 0 3px var(--ms-accent-15), var(--ms-glow) !important;
+  transform: scale(1.3);
+}
+
+/* Controls panel */
+.react-flow__controls {
+  background: rgba(13,16,40,0.85) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid var(--ms-border) !important;
+  border-radius: 14px !important;
+  box-shadow: var(--ms-shadow-md) !important;
+  overflow: hidden;
+}
+.react-flow__controls button {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+  color: var(--ms-text-muted) !important;
+  border-radius: 0 !important;
+  transition: color 0.15s, background 0.15s !important;
+}
+.react-flow__controls button:hover {
+  color: var(--ms-text) !important;
+  background: rgba(255,255,255,0.05) !important;
+}
+.react-flow__controls button:last-child { border-bottom: none !important; }
+
+/* MiniMap */
+.react-flow__minimap {
+  border-radius: 14px !important;
+  border: 1px solid var(--ms-border) !important;
+  box-shadow: var(--ms-shadow-md) !important;
+  background: rgba(13,16,40,0.85) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+}
+
+/* ─── TipTap editor ──────────────────────────────────────────────────────── */
+.tiptap { outline: none; color: var(--ms-text); font-size: 14px; line-height: 1.6; }
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--ms-text-muted);
+  pointer-events: none; float: left; height: 0;
+}
+.tiptap h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; }
+.tiptap h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+.tiptap h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem; }
+.tiptap p  { margin-bottom: 0.5rem; }
+.tiptap ul, .tiptap ol { padding-left: 1.25rem; margin-bottom: 0.5rem; }
+.tiptap code { background: rgba(255,255,255,0.08); border-radius: 4px; padding: 0.1em 0.3em; font-size: 0.875em; font-family: "SF Mono", Monaco, monospace; }
+.tiptap pre  { background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 0.75rem; margin-bottom: 0.5rem; overflow-x: auto; }
+.tiptap blockquote { border-left: 3px solid var(--ms-accent); padding-left: 0.75rem; color: var(--ms-text-muted); }
+.tiptap ul[data-type="taskList"] { list-style: none; padding-left: 0; }
+.tiptap ul[data-type="taskList"] li { display: flex; align-items: flex-start; gap: 0.5rem; }
+.tiptap ul[data-type="taskList"] li input[type="checkbox"] { margin-top: 3px; accent-color: var(--ms-accent); }
+
+/* ─── Titlebar drag region ───────────────────────────────────────────────── */
+[data-tauri-drag-region] { -webkit-app-region: drag; }
+[data-tauri-drag-region] button,
+[data-tauri-drag-region] input,
+[data-tauri-drag-region] a { -webkit-app-region: no-drag; }
+
+/* ─── Node card — glassmorphism elevation ────────────────────────────────── */
+.ms-node {
+  background: var(--ms-surface);
+  border: 1px solid var(--ms-border);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: var(--ms-shadow-md);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.ms-node:hover {
+  box-shadow: var(--ms-shadow-lg), var(--ms-glow);
+  border-color: var(--ms-border-2);
+}
+.ms-node.selected {
+  box-shadow: var(--ms-shadow-lg), var(--ms-glow-strong);
+  border-color: var(--ms-accent);
+}
+
+.ms-node-header {
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: grab;
+  background: linear-gradient(135deg, rgba(255,255,255,0.048) 0%, rgba(255,255,255,0.010) 100%);
+  border-bottom: 1px solid var(--ms-border);
+}
+.ms-node-header:active { cursor: grabbing; }
+
+.ms-node-header button {
+  border-radius: 8px;
+  transition: background 0.12s ease, transform 0.1s ease;
+}
+.ms-node-header button:hover  { background: rgba(255,255,255,0.08) !important; }
+.ms-node-header button:active {
+  background: rgba(255,255,255,0.04) !important;
+  transform: scale(0.94);
+}
+
+.ms-node-body { padding: 10px 12px; }
+
+/* Inputs inside nodes — clean dark inset */
+.ms-node input[type="text"],
+.ms-node input:not([type]),
+.ms-node input[type="number"],
+.ms-node textarea {
+  background: rgba(0,0,0,0.28) !important;
+  border: 1px solid var(--ms-border) !important;
+  box-shadow: none !important;
+  border-radius: 8px !important;
+  color: var(--ms-text) !important;
+  transition: border-color 0.15s ease;
+}
+.ms-node input[type="text"]:focus,
+.ms-node input:not([type]):focus,
+.ms-node input[type="number"]:focus,
+.ms-node textarea:focus {
+  border-color: var(--ms-accent) !important;
+  box-shadow: 0 0 0 2px var(--ms-accent-15) !important;
+  outline: none !important;
+}
+.ms-node select {
+  background: rgba(0,0,0,0.28) !important;
+  border: 1px solid var(--ms-border) !important;
+  box-shadow: none !important;
+  border-radius: 8px !important;
+  color: var(--ms-text) !important;
+}
+
+/* ─── AI Chat Markdown ────────────────────────────────────────────────────── */
+.ms-chat-md { font-size: 11px; line-height: 1.65; color: var(--ms-text); }
+.ms-chat-md p { margin: 0 0 6px; }
+.ms-chat-md p:last-child { margin-bottom: 0; }
+.ms-chat-md strong { font-weight: 700; }
+.ms-chat-md em { font-style: italic; }
+.ms-chat-md code { background: rgba(255,255,255,0.08); border-radius: 4px; padding: 1px 5px; font-family: ui-monospace, monospace; font-size: 10px; }
+.ms-chat-md pre { background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 8px 10px; overflow-x: auto; margin: 6px 0; }
+.ms-chat-md pre code { background: none; padding: 0; font-size: 10px; }
+.ms-chat-md ul, .ms-chat-md ol { padding-left: 16px; margin: 4px 0; }
+.ms-chat-md li { margin: 2px 0; }
+.ms-chat-md h1 { font-size: 14px; font-weight: 700; margin: 8px 0 4px; }
+.ms-chat-md h2 { font-size: 12px; font-weight: 700; margin: 6px 0 3px; }
+.ms-chat-md h3 { font-size: 11px; font-weight: 600; margin: 5px 0 2px; }
+.ms-chat-md blockquote { border-left: 2px solid var(--ms-accent); padding-left: 8px; color: var(--ms-text-muted); margin: 4px 0; }
+.ms-chat-md table { border-collapse: collapse; font-size: 10px; margin: 6px 0; width: 100%; }
+.ms-chat-md th, .ms-chat-md td { border: 1px solid rgba(255,255,255,0.07); padding: 3px 6px; }
+.ms-chat-md th { background: rgba(255,255,255,0.05); font-weight: 600; }
+.ms-chat-md a { color: var(--ms-accent); text-decoration: underline; }
+.ms-chat-md hr { border: none; border-top: 1px solid rgba(255,255,255,0.07); margin: 8px 0; }
+
+/* ─── Fluid gradient blob drift animations ───────────────────────────────── */
+@keyframes ms-blob-1 {
+  0%   { transform: translate(0%,   0%)   scale(1.00); }
+  20%  { transform: translate(16%,  -10%) scale(1.06); }
+  45%  { transform: translate(6%,   18%)  scale(0.94); }
+  70%  { transform: translate(-12%, 8%)   scale(1.04); }
+  100% { transform: translate(0%,   0%)   scale(1.00); }
+}
+@keyframes ms-blob-2 {
+  0%   { transform: translate(0%,   0%)   scale(1.00); }
+  30%  { transform: translate(-14%, 16%)  scale(1.07); }
+  60%  { transform: translate(10%,  -12%) scale(0.95); }
+  100% { transform: translate(0%,   0%)   scale(1.00); }
+}
+@keyframes ms-blob-3 {
+  0%   { transform: translate(0%,   0%)   scale(1.00); }
+  35%  { transform: translate(12%,  12%)  scale(0.92); }
+  75%  { transform: translate(-6%,  -16%) scale(1.10); }
+  100% { transform: translate(0%,   0%)   scale(1.00); }
+}
+@keyframes ms-blob-4 {
+  0%   { transform: translate(0%,   0%)   scale(1.02); }
+  50%  { transform: translate(-10%, -10%) scale(0.96); }
+  100% { transform: translate(0%,   0%)   scale(1.02); }
+}
+
+/* ── Live connectors: canvas owns edges; ReactFlow edges go invisible ────── */
+.live-mode .react-flow__edge-path { stroke: transparent !important; }
+.live-mode .react-flow__handle {
+  background: var(--ms-node-dot, #c8ff20) !important;
+  border-color: var(--ms-node-dot, #c8ff20) !important;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--ms-node-dot, #c8ff20) 45%, transparent) !important;
+}
+
+/* ── Plain connectors: theme-colored ReactFlow edges and handles ─────────── */
+.plain-mode .react-flow__edge-path { stroke: var(--ms-accent) !important; stroke-width: 1.5px !important; }
+.plain-mode .react-flow__handle {
+  background: var(--ms-accent) !important;
+  border-color: var(--ms-bg) !important;
+  box-shadow: var(--ms-glow) !important;
+}
+
+/* ─── Locked node badge ──────────────────────────────────────────────────── */
+.react-flow__node.ms-node-locked::after {
+  content: "🔒";
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  font-size: 10px;
+  background: var(--ms-surface);
+  border: 1px solid var(--ms-border);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+}
