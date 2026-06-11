@@ -2,6 +2,20 @@
 
 All notable changes to MindSpace. Versions follow semantic versioning.
 
+## [v1.4.0] — 2026-06-11
+
+### Added
+- Global search (⌘K): FTS5 full-text index over every node's content across all projects, with fuzzy prefix matching, snippets, and jump-to-node (switches project/canvas, centers and selects the node). ([request file](docs/requests/2026-06-11-phase-1-core-ux.md))
+- Canvas undo/redo (⌘Z / ⇧⌘Z): node add/delete/move/resize/edit and edge changes, with rapid edits coalesced and multi-node operations undone as one step.
+- Streaming AI responses in both the canvas chat node and the editor modal, with a Stop button that cancels generation server-side.
+- ⌘D duplicates the selected nodes; ⌘G groups them.
+- Alignment toolbar on multi-select: align left/center/right/top/middle/bottom, distribute horizontally/vertically.
+- Padlock badge on locked nodes.
+
+### Changed
+- Store refactored into data / ui / settings / history slices (same public API).
+- New `http_post_stream` + `cancel_stream` Tauri commands (same host allowlist as `http_post`).
+
 ## [v1.3.0] — 2026-06-11
 
 ### Fixed
