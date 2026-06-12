@@ -8,6 +8,8 @@ import {
   removeCanvasIndex,
   removeProjectIndex,
 } from "../../lib/search";
+import { enqueueNodeEmbedding, backfillBrainIndex } from "../../lib/brain/embeddings";
+import { notifyNodeCreated } from "../../lib/rules/engine";
 import type { AppState } from "../index";
 
 export interface DataSlice {
@@ -64,7 +66,10 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
   init: async () => {
     await get().loadSettings();
     await get().loadProjects();
-    initSearchIndex().catch((err) => console.warn("Search index init failed:", err));
+    initSearchIndex()
+      .then(() => backfillBrainIndex())
+      .catch((err) => console.warn("Search/brain index init failed:", err));
+    get().refreshInboxCount().catch(() => {});
   },
 
   loadProjects: async () => {
@@ -206,6 +211,8 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
     set((s) => ({ nodes: [...s.nodes, node] }));
     get().recordHistory({ t: "add", node });
     upsertNodeIndex(node).catch(() => {});
+    enqueueNodeEmbedding(node.id);
+    notifyNodeCreated(node);
     return node;
   },
 
@@ -221,9 +228,15 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
     }
     // Update state synchronously (optimistic) — controlled inputs garble keystrokes
     // if their value round-trips through an awaited DB write before re-rendering.
-    set((s) => ({
-      nodes: s.nodes.map((n) => (n.id === id ? { ...n, ...updated } : n)),
-    }));
+    // A canvas_id change also updates membership: nodes moved off the active
+    // canvas disappear from state.
+    set((s) => {
+      let nodes = s.nodes.map((n) => (n.id === id ? { ...n, ...updated } : n));
+      if (typeof updated.canvas_id === "string" && updated.canvas_id !== s.activeCanvasId) {
+        nodes = nodes.filter((n) => n.id !== id);
+      }
+      return { nodes };
+    });
     try {
       const db = await getDb();
       if (updated.data) {
@@ -237,11 +250,42 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
           ...Object.values(updated), id,
         ]);
       }
+      // Node moved ONTO the active canvas from elsewhere (e.g. undo of a triage
+      // filing): load it into state.
+      if (
+        typeof updated.canvas_id === "string" &&
+        updated.canvas_id === get().activeCanvasId &&
+        !get().nodes.some((n) => n.id === id)
+      ) {
+        const rows = await db.select<any[]>("SELECT * FROM nodes WHERE id = ?", [id]);
+        if (rows[0]) {
+          const n = rows[0];
+          set((s) => ({
+            nodes: [...s.nodes, { ...n, data: JSON.parse(n.data), locked: !!n.locked, parent_id: n.parent_id ?? null }],
+          }));
+        }
+      }
     } catch (err) {
       console.error("Failed to persist node update", id, err);
     }
-    if (updated.data && current) {
-      upsertNodeIndex({ id, canvas_id: current.canvas_id, type: current.type, data: updated.data }).catch(() => {});
+    if (updated.data) {
+      const canvasId = current?.canvas_id ?? get().nodes.find((n) => n.id === id)?.canvas_id;
+      const type = current?.type ?? get().nodes.find((n) => n.id === id)?.type;
+      if (canvasId && type) {
+        upsertNodeIndex({ id, canvas_id: canvasId, type, data: updated.data }).catch(() => {});
+      }
+      enqueueNodeEmbedding(id);
+    }
+    if (typeof updated.canvas_id === "string") {
+      // Canvas membership changed — refresh index rows that store canvas/project.
+      enqueueNodeEmbedding(id);
+      const db2 = await getDb();
+      const rows = await db2.select<any[]>("SELECT type, data, canvas_id FROM nodes WHERE id = ?", [id]);
+      if (rows[0]) {
+        try {
+          upsertNodeIndex({ id, canvas_id: rows[0].canvas_id, type: rows[0].type, data: JSON.parse(rows[0].data) }).catch(() => {});
+        } catch { /* bad data */ }
+      }
     }
   },
 
@@ -249,18 +293,13 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
     const node = get().nodes.find((n) => n.id === id);
     const connectedEdges = get().edges.filter((e) => e.source === id || e.target === id);
     const db = await getDb();
-    // Ungroup children + delete node + delete edges atomically — a crash
-    // mid-sequence must not leave orphaned edges or half-deleted groups.
-    await db.execute("BEGIN");
-    try {
-      await db.execute("UPDATE nodes SET parent_id = NULL WHERE parent_id = ?", [id]);
-      await db.execute("DELETE FROM nodes WHERE id = ?", [id]);
-      await db.execute("DELETE FROM edges WHERE source = ? OR target = ?", [id, id]);
-      await db.execute("COMMIT");
-    } catch (err) {
-      await db.execute("ROLLBACK").catch(() => {});
-      throw err;
-    }
+    // No raw BEGIN/COMMIT — the SQL plugin's connection pool can split a
+    // transaction across connections and abort it. Ordered so a mid-sequence
+    // failure cannot orphan data: ungroup children and drop edges before the
+    // node itself.
+    await db.execute("UPDATE nodes SET parent_id = NULL WHERE parent_id = ?", [id]);
+    await db.execute("DELETE FROM edges WHERE source = ? OR target = ?", [id, id]);
+    await db.execute("DELETE FROM nodes WHERE id = ?", [id]);
     set((s) => ({
       nodes: s.nodes
         .filter((n) => n.id !== id)
@@ -271,6 +310,7 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
       get().recordHistory({ t: "del", node, edges: connectedEdges });
     }
     removeNodeIndex(id).catch(() => {});
+    enqueueNodeEmbedding(id); // index worker purges chunks/vectors for missing nodes
   },
 
   restoreNode: async (node) => {
@@ -280,6 +320,7 @@ export const createDataSlice: StateCreator<AppState, [], [], DataSlice> = (set, 
       set((s) => ({ nodes: [...s.nodes, node] }));
     }
     upsertNodeIndex(node).catch(() => {});
+    enqueueNodeEmbedding(node.id);
   },
 
   addEdge: async (edgeData) => {

@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { Handle, Position, NodeProps, Node, NodeResizer } from "@xyflow/react";
 import { useCmdKey } from "../../hooks/useCmdKey";
 import { motion } from "framer-motion";
-import { ListChecks, ChevronLeft, ChevronRight, Plus, Trash2, X } from "lucide-react";
+import { ListChecks, ChevronLeft, ChevronRight, Plus, Trash2, X, Flame, Check } from "lucide-react";
 import { useStore } from "../../store";
 import { MindNode, HabitTrackerData, HabitItem } from "../../types";
 import { generateId } from "../../lib/db";
@@ -191,7 +191,7 @@ export function HabitTrackerNode({ data, selected }: NodeProps<HabitTrackerNodeT
                   </th>
                 ))}
                 <th style={{ fontSize: 10, color: "var(--ms-text-muted)", fontWeight: 500, padding: "3px 2px", textAlign: "center", minWidth: 36 }}>
-                  🔥
+                  <Flame size={11} color="#f97316" style={{ display: "inline-block", verticalAlign: "middle" }} />
                 </th>
               </tr>
             </thead>
@@ -250,7 +250,7 @@ export function HabitTrackerNode({ data, selected }: NodeProps<HabitTrackerNodeT
                                 transition: "background 0.12s",
                               }}
                             >
-                              {checked && <span style={{ fontSize: 10, color: "#fff", lineHeight: 1 }}>✓</span>}
+                              {checked && <Check size={10} color="#fff" strokeWidth={3} />}
                             </button>
                           </td>
                         );

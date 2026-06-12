@@ -11,6 +11,12 @@ import { SettingsPanel } from "./components/settings/SettingsPanel";
 import { QuickCaptureModal } from "./components/modals/QuickCaptureModal";
 import { NodeEditorModal } from "./components/modals/NodeEditorModal";
 import { SearchPalette } from "./components/modals/SearchPalette";
+import { TodayPanel } from "./components/modals/TodayPanel";
+import { GraphViewModal } from "./components/modals/GraphViewModal";
+import { ensureDailyDigest } from "./lib/brain/digest";
+import { triageInbox } from "./lib/brain/triage";
+import { embedAllModels, loadModelEmbeddings } from "./lib/brain/suggestions";
+import { startRulesEngine, stopRulesEngine } from "./lib/rules/engine";
 
 function WelcomeScreen() {
   const { setCreateProjectPrompt } = useStore();
@@ -88,11 +94,14 @@ function App() {
     sidebarOpen,
     setSidebarOpen,
     searchOpen,
+    todayOpen,
+    graphOpen,
     init,
   } = useStore();
 
-  // Global keyboard layer: Cmd+K search, Cmd+Z / Cmd+Shift+Z canvas undo/redo.
-  // Undo/redo is suppressed while typing — text editors keep their own history.
+  // Global keyboard layer: Cmd+K search, Cmd+Shift+G graph, Cmd+Z / Cmd+Shift+Z
+  // canvas undo/redo. Undo/redo is suppressed while typing — text editors keep
+  // their own history.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
@@ -102,6 +111,12 @@ function App() {
         e.preventDefault();
         const s = useStore.getState();
         s.setSearchOpen(!s.searchOpen);
+        return;
+      }
+      if (key === "g" && e.shiftKey) {
+        e.preventDefault();
+        const s = useStore.getState();
+        s.setGraphOpen(!s.graphOpen);
         return;
       }
       const target = e.target as HTMLElement | null;
@@ -115,6 +130,57 @@ function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Brain background jobs, delayed so they never compete with startup:
+  // daily digest, triage of items left in the Inbox, recent-triage list.
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      const s = useStore.getState();
+      try {
+        const digest = await ensureDailyDigest();
+        s.setDigest(digest);
+      } catch (err) { console.warn("Digest generation failed:", err); }
+      try { await triageInbox(); } catch { /* offline */ }
+      s.loadTriageRecent().catch(() => {});
+      s.refreshInboxCount().catch(() => {});
+      // Ambient model suggestions: backfill missing embeddings, then warm the
+      // cache. Both no-op quietly when LM Studio is offline.
+      await embedAllModels();
+      await loadModelEmbeddings();
+    }, 4000);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Automations: rules engine tick loop (main window only).
+  useEffect(() => {
+    startRulesEngine();
+    return () => stopRulesEngine();
+  }, []);
+
+  // Tray captures land in the Inbox from the capture window: refresh the
+  // badge and schedule triage for the new node.
+  useEffect(() => {
+    if (!isTauri()) return;
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      const { listen } = await import("@tauri-apps/api/event");
+      unlisten = await listen<{ nodeId: string }>("mindspace://captured", ({ payload }) => {
+        const s = useStore.getState();
+        s.refreshInboxCount().catch(() => {});
+        if (s.settings.triage_enabled) {
+          setTimeout(() => {
+            triageInbox([payload.nodeId])
+              .then(() => {
+                useStore.getState().loadTriageRecent().catch(() => {});
+                useStore.getState().refreshInboxCount().catch(() => {});
+              })
+              .catch(() => {});
+          }, 1500);
+        }
+      });
+    })();
+    return () => { unlisten?.(); };
   }, []);
 
   // Rounded corners in windowed mode, none in fullscreen
@@ -261,6 +327,16 @@ function App() {
         {/* Global search palette */}
         <AnimatePresence>
           {searchOpen && <SearchPalette key="search-palette" />}
+        </AnimatePresence>
+
+        {/* Today digest panel */}
+        <AnimatePresence>
+          {todayOpen && <TodayPanel key="today-panel" />}
+        </AnimatePresence>
+
+        {/* Knowledge graph view */}
+        <AnimatePresence>
+          {graphOpen && <GraphViewModal key="graph-view" />}
         </AnimatePresence>
       </main>
     </div>

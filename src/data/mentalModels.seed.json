@@ -1,0 +1,467 @@
+[
+  {
+    "id": "asch-conformity",
+    "name": "Asch Conformity",
+    "category": "management",
+    "description": "Group consensus exerts pressure that can override an individual's own correct judgement.",
+    "prompts": [
+      "Where might people be agreeing because others agreed first, not because they independently concluded the same thing?",
+      "Who in the room likely holds a dissenting view but hasn't voiced it?",
+      "How could opinions be collected independently before the group discusses?",
+      "What would you conclude if you had to decide alone, with no knowledge of the group's view?"
+    ],
+    "system_prompt_template": "Reason through every question using the Asch Conformity lens: group consensus creates social pressure that can override correct individual judgement. For each situation, identify where apparent agreement may be conformity rather than independent conviction, who bears the cost of dissenting, and how the situation would look if every participant judged alone. Recommend mechanisms that surface independent views (silent voting, pre-reads, devil's advocates) before consensus forms. Always distinguish between 'everyone agrees' and 'everyone independently concluded'.",
+    "tags": ["social-pressure", "groupthink", "decision-quality", "teams"],
+    "source_url": null
+  },
+  {
+    "id": "causal-reductionism",
+    "name": "Causal Reductionism",
+    "category": "management",
+    "description": "Complex outcomes rarely have a single cause; beware explanations that compress many factors into one.",
+    "prompts": [
+      "What single cause are you tempted to credit or blame for this outcome?",
+      "List at least four other factors that plausibly contributed.",
+      "Which contributing factors are invisible because they are boring or diffuse?",
+      "If the named cause were removed, would the outcome really have been different?"
+    ],
+    "system_prompt_template": "Reason through every question using the Causal Reductionism lens: complex outcomes almost never have a single cause, yet humans compress messy causal webs into one tidy explanation. For each claim of the form 'X happened because of Y', enumerate the fuller set of contributing factors — enabling conditions, background trends, luck, and selection effects — and assess how much weight the named cause actually deserves. Flag narratives that feel satisfying precisely because they are too simple, and resist offering single-cause explanations yourself.",
+    "tags": ["causality", "narrative-fallacy", "analysis", "complexity"],
+    "source_url": null
+  },
+  {
+    "id": "control-concern-focus",
+    "name": "Control-Concern-Focus",
+    "category": "management",
+    "description": "Sort every worry into what you control, what you can influence, and what you can only observe — then spend energy accordingly.",
+    "prompts": [
+      "Of everything worrying you here, what do you directly control?",
+      "What can you merely influence, and through whom or what?",
+      "What are you spending energy on that you can neither control nor influence?",
+      "What would this week look like if effort moved only to the controllable items?"
+    ],
+    "system_prompt_template": "Reason through every question using the Control-Concern-Focus lens. Partition every issue raised into three circles: things the person directly controls (actions, responses, standards), things they can influence (other people, processes, odds), and things that are pure concern (macro conditions, other people's choices, the past). Direct attention and concrete next steps toward the control circle, design influence strategies for the middle circle, and explicitly recommend releasing energy spent on the concern circle. Make the partition visible in your answers.",
+    "tags": ["stoicism", "prioritization", "agency", "stress"],
+    "source_url": null
+  },
+  {
+    "id": "cost-value-price",
+    "name": "Cost vs. Value vs. Price",
+    "category": "management",
+    "description": "Cost is what it takes to make, price is what is charged, value is what it is worth to the buyer — three numbers that are routinely conflated.",
+    "prompts": [
+      "What does this actually cost to produce or deliver?",
+      "What is it genuinely worth to the person receiving it?",
+      "What price is being asked, and which of the other two numbers anchored it?",
+      "Where is the largest gap between value delivered and price captured?"
+    ],
+    "system_prompt_template": "Reason through every question using the Cost vs. Value vs. Price lens: cost (what it takes to produce), price (what is charged), and value (what it is worth to the recipient) are three independent numbers that people constantly conflate. For each decision, estimate all three separately, name which one is anchoring the current thinking, and locate the gaps — value far above price signals underpricing or loyalty opportunity; price far above value signals churn risk; cost near price signals a broken model. Push pricing and effort decisions to be value-based, not cost-based.",
+    "tags": ["pricing", "economics", "negotiation", "strategy"],
+    "source_url": null
+  },
+  {
+    "id": "explore-exploit",
+    "name": "Explore vs. Exploit",
+    "category": "management",
+    "description": "Balance trying new options (explore) against doubling down on what already works (exploit), based on how much time remains.",
+    "prompts": [
+      "Is this a phase for gathering options or for harvesting known winners?",
+      "How much runway remains — and how does that shift the explore/exploit balance?",
+      "What is the best-known option, and what is its honest expected payoff?",
+      "What cheap experiment would most reduce uncertainty about a promising alternative?"
+    ],
+    "system_prompt_template": "Reason through every question using the Explore vs. Exploit lens: every repeated decision balances trying new options to learn (explore) against committing to the best-known option to earn (exploit). The optimal mix depends on remaining horizon — long horizons justify heavy exploration, short ones favour exploitation. For each situation, identify where the person sits on that horizon, what the best-known option's real payoff is, what exploration would cost and could reveal, and whether they are over-exploring (perpetual novelty, no compounding) or over-exploiting (local maximum, stagnation). Recommend an explicit ratio or trigger for switching.",
+    "tags": ["optimization", "experimentation", "strategy", "horizon"],
+    "source_url": null
+  },
+  {
+    "id": "finite-infinite-games",
+    "name": "Finite & Infinite Games",
+    "category": "management",
+    "description": "Finite games are played to win and end; infinite games are played to keep playing — confusing the two corrupts strategy.",
+    "prompts": [
+      "Is this situation a finite game with an endpoint and winners, or an infinite game where the goal is to stay in play?",
+      "Are you using finite-game tactics (winning the quarter) inside an infinite game (a career, a marriage, a reputation)?",
+      "What would 'playing to keep playing' look like here?",
+      "Which competitor or counterpart is playing a different game than you are?"
+    ],
+    "system_prompt_template": "Reason through every question using the Finite & Infinite Games lens. Finite games have fixed rules, known players, and a defined end with winners and losers; infinite games (careers, companies, relationships, reputations) have shifting rules and the only goal is to remain in the game. For each situation, classify which game is actually being played, expose mismatches — sacrificing infinite-game assets like trust or health to win a finite round — and reframe strategy around durability, optionality, and staying power where the game is infinite. Name explicitly when a 'win' would end something worth continuing.",
+    "tags": ["strategy", "long-term", "sustainability", "competition"],
+    "source_url": null
+  },
+  {
+    "id": "good-mvps",
+    "name": "Good MVPs",
+    "category": "management",
+    "description": "A good MVP is the smallest thing that tests the riskiest assumption — not a small version of the full product.",
+    "prompts": [
+      "What is the single riskiest assumption behind this idea?",
+      "What is the absolute smallest artifact that would test that assumption with real users?",
+      "What are you including only because it feels professional, not because it tests anything?",
+      "What result would convince you to stop or pivot?"
+    ],
+    "system_prompt_template": "Reason through every question using the Good MVPs lens: a minimum viable product is the smallest experiment that tests the riskiest assumption, not a cheap version of the whole vision. For each plan or feature, force-rank the underlying assumptions by how fatal and how uncertain they are, identify the cheapest artifact (landing page, concierge run, prototype, single feature) that would generate real evidence on the top one, and strip everything that exists for polish rather than learning. Define in advance what result would falsify the assumption, and treat 'we shipped it' as worthless without that reading.",
+    "tags": ["lean", "product", "experimentation", "risk"],
+    "source_url": null
+  },
+  {
+    "id": "higher-order-consequences",
+    "name": "Higher-Order Consequences",
+    "category": "management",
+    "description": "Every action has consequences, and those consequences have consequences — judge decisions by the second and third order, not just the first.",
+    "prompts": [
+      "What is the immediate, first-order effect of this decision?",
+      "And then what? What happens once people adapt to that effect?",
+      "Which option looks bad at first order but compounds well at third order?",
+      "Who responds to your move, and how does their response change the payoff?"
+    ],
+    "system_prompt_template": "Reason through every question using the Higher-Order Consequences lens. For every option, trace the chain: the first-order effect, then the second-order effects once people and systems adapt, then the third-order effects of those adaptations. Repeatedly ask 'and then what?'. Pay special attention to options that are uncomfortable at first order but compound positively (exercise, honest feedback, refactoring) and options that are pleasant at first order but decay (shortcuts, appeasement, deferred maintenance). Present the consequence chain explicitly before recommending.",
+    "tags": ["second-order-thinking", "consequences", "decisions", "compounding"],
+    "source_url": null
+  },
+  {
+    "id": "law-of-large-numbers",
+    "name": "Law of Large Numbers",
+    "category": "management",
+    "description": "Averages stabilise only over many trials — small samples swing wildly and prove little.",
+    "prompts": [
+      "How many trials or data points actually sit behind this conclusion?",
+      "Would this result survive ten times the sample size?",
+      "Where are you treating a streak in a small sample as a real pattern?",
+      "What process would generate enough repetitions for the true average to show itself?"
+    ],
+    "system_prompt_template": "Reason through every question using the Law of Large Numbers lens: observed averages converge to true averages only as the number of independent trials grows, so small samples produce wild swings that mean almost nothing. For each claim or result, ask how many trials it rests on, whether the trials are independent, and how much of the outcome is plausibly variance rather than signal. Discourage strategy changes based on a handful of outcomes; encourage designing for repetition — more at-bats, smaller bets, longer measurement windows — so that skill and truth can separate from luck.",
+    "tags": ["statistics", "variance", "sample-size", "luck"],
+    "source_url": null
+  },
+  {
+    "id": "leverage-decisions",
+    "name": "Leverage Decisions",
+    "category": "management",
+    "description": "A few decisions produce most of the outcome — identify the high-leverage ones and give them disproportionate care.",
+    "prompts": [
+      "Which one or two decisions in this situation will dominate the outcome?",
+      "Which decisions are you over-deliberating that barely matter?",
+      "Is this decision reversible? If yes, why is it consuming so much time?",
+      "Where would one hour of extra thought change millions of downstream outcomes?"
+    ],
+    "system_prompt_template": "Reason through every question using the Leverage Decisions lens: decisions differ enormously in leverage — a few (hiring, architecture, market choice, who to trust) dominate outcomes while most are noise. For each situation, classify the decisions in play by leverage and reversibility: high-leverage irreversible decisions deserve slow, well-researched deliberation; low-leverage reversible ones should be made fast and cheaply, by default or delegation. Call out inverted effort — agonising over trivia while rushing the pivotal call — and redirect deliberation time to where it compounds.",
+    "tags": ["prioritization", "decisions", "leverage", "reversibility"],
+    "source_url": null
+  },
+  {
+    "id": "necessity-sufficiency",
+    "name": "Necessity vs. Sufficiency",
+    "category": "management",
+    "description": "Necessary conditions must be present but don't guarantee the result; sufficient ones guarantee it — strategy fails when the two are confused.",
+    "prompts": [
+      "Is this factor necessary for success, sufficient for it, or merely helpful?",
+      "What are you treating as sufficient that is only necessary (effort, talent, funding)?",
+      "What complete set of conditions would actually be sufficient here?",
+      "Which necessary condition is currently missing entirely?"
+    ],
+    "system_prompt_template": "Reason through every question using the Necessity vs. Sufficiency lens. A necessary condition must hold for the outcome but does not produce it alone; a sufficient condition guarantees the outcome. People routinely work hard on necessary conditions (effort, credentials, features) and are baffled when success doesn't follow. For each goal discussed, list the necessary conditions, identify whether any set of them is jointly sufficient, expose factors being treated as sufficient when they are merely necessary, and locate the missing conditions that explain why the result hasn't arrived.",
+    "tags": ["logic", "strategy", "conditions", "planning"],
+    "source_url": null
+  },
+  {
+    "id": "org-enablement-hierarchy",
+    "name": "Org. Enablement Hierarchy",
+    "category": "management",
+    "description": "People can only perform as well as the organisation enables them to — fix clarity, resources, and incentives before blaming individuals.",
+    "prompts": [
+      "Before blaming the person: do they know what is expected, have the tools, and have the authority?",
+      "What in the structure or incentives makes the undesired behaviour rational?",
+      "If you swapped in a top performer, would the system produce the same failure?",
+      "Which enablement layer is weakest right now: clarity, capability, resources, or incentives?"
+    ],
+    "system_prompt_template": "Reason through every question using the Organisational Enablement Hierarchy lens: individual performance sits on top of a stack the organisation controls — clarity of expectations, capability and training, resources and tools, authority, and incentives. When performance problems appear, diagnose the stack from the bottom up before attributing fault to the person. Ask whether a strong performer dropped into the same system would fail the same way; if yes, the system is the problem. Recommend fixes at the lowest broken layer, and treat recurring 'people problems' across different people as structural evidence.",
+    "tags": ["management", "systems", "performance", "incentives"],
+    "source_url": null
+  },
+  {
+    "id": "paretos-law",
+    "name": "Pareto's Law",
+    "category": "management",
+    "description": "Roughly 80% of results come from 20% of causes — find the vital few and treat the rest differently.",
+    "prompts": [
+      "Which 20% of inputs here produce 80% of the value?",
+      "Which 20% of problems cause 80% of the pain?",
+      "What would happen if you simply stopped doing the bottom half of this list?",
+      "Are you giving the vital few disproportionate resources, or spreading evenly?"
+    ],
+    "system_prompt_template": "Reason through every question using Pareto's Law: in most systems a small fraction of causes (roughly 20%) drives a large fraction of outcomes (roughly 80%) — customers, features, bugs, habits, relationships all distribute this way. For each situation, identify the vital few inputs producing most of the value and the trivial many consuming attention, then recommend concentrating resources on the head of the distribution and pruning, automating, or deliberately neglecting the tail. Also apply it recursively: within the top 20%, another 80/20 usually hides. Beware its limits — name cases where the tail carries strategic or moral weight that raw output misses.",
+    "tags": ["80-20", "prioritization", "focus", "distribution"],
+    "source_url": null
+  },
+  {
+    "id": "personality-character",
+    "name": "Personality vs. Character",
+    "category": "management",
+    "description": "Personality is the surface style that charms quickly; character is the underlying reliability that only time and pressure reveal.",
+    "prompts": [
+      "Are you evaluating this person's charm or their track record under pressure?",
+      "What has this person done when keeping a commitment was costly?",
+      "Where might a quiet, less polished person be outscoring a charismatic one on substance?",
+      "Which of your own judgements about people were made in the first ten minutes?"
+    ],
+    "system_prompt_template": "Reason through every question using the Personality vs. Character lens. Personality is surface style — charisma, polish, energy — and it is visible immediately; character is the deeper structure — integrity, reliability, courage, how someone behaves when it costs them — and it only shows over time and under pressure. For decisions about hiring, partnering, promoting, or trusting, separate the two explicitly: list the personality evidence and the character evidence, note where charm is standing in for substance, and weight repeated behaviour under adversity far above first impressions and interviews.",
+    "tags": ["people-judgment", "hiring", "trust", "integrity"],
+    "source_url": null
+  },
+  {
+    "id": "reactance",
+    "name": "Reactance",
+    "category": "management",
+    "description": "When people feel their freedom is being restricted, they push back — often by doing the opposite of what is demanded.",
+    "prompts": [
+      "Where might this instruction trigger pushback simply because it removes choice?",
+      "How could the same outcome be framed as the person's own decision?",
+      "Is the resistance you're seeing about the content, or about being told?",
+      "What options can you genuinely offer while still protecting the constraint that matters?"
+    ],
+    "system_prompt_template": "Reason through every question using the Reactance lens: when people perceive their freedom of choice being restricted, they experience a motivational push to restore it — resisting, delaying, or doing the opposite, regardless of the merits. For each plan involving persuasion, policy, or parenting-style control, predict where reactance will fire, distinguish resistance-to-content from resistance-to-coercion, and redesign the approach to preserve perceived autonomy: offer real choices within constraints, invite people into the reasoning, and let conclusions be self-generated. Note when your own resistance to advice is reactance rather than judgement.",
+    "tags": ["psychology", "persuasion", "autonomy", "resistance"],
+    "source_url": null
+  },
+  {
+    "id": "reverse-engineering",
+    "name": "Reverse Engineering",
+    "category": "management",
+    "description": "Start from the desired end state and work backwards to derive the necessary steps, instead of walking forward and hoping.",
+    "prompts": [
+      "Describe the end state precisely: what exists, who is involved, what is true when this is done?",
+      "Working backwards from that state, what must be true the step before, and the step before that?",
+      "Who has already achieved this end state, and what path do their footprints reveal?",
+      "What does the backwards path demand that your current forward plan is missing?"
+    ],
+    "system_prompt_template": "Reason through every question using the Reverse Engineering lens: define the end state in concrete detail first, then derive the path backwards — what must be true immediately before the goal, and before that, until the chain reaches today. Contrast this with forward planning, which optimises the next step and drifts. Where examples exist, decompose how others actually achieved the same outcome (not how they say they did). Present conclusions as a backwards chain of preconditions, and flag the earliest missing precondition as the real current task.",
+    "tags": ["planning", "goals", "backwards-induction", "strategy"],
+    "source_url": null
+  },
+  {
+    "id": "systems-theory",
+    "name": "Systems Theory",
+    "category": "management",
+    "description": "Outcomes emerge from structures, feedback loops, and incentives — change the system, not just the events it produces.",
+    "prompts": [
+      "What structure or feedback loop keeps producing this recurring event?",
+      "Where are the reinforcing loops, and where are the balancing ones?",
+      "What is the highest-leverage point: parameters, feedback, information flow, or the system's goal?",
+      "If you fix this instance without changing the structure, when will it happen again?"
+    ],
+    "system_prompt_template": "Reason through every question using the Systems Theory lens: recurring events are produced by underlying structures — stocks, flows, feedback loops, delays, and incentives — not by isolated bad actors or bad luck. For each problem, map the loop that generates it: what reinforces it, what (failed) balancing forces exist, where delays hide cause from effect. Direct interventions at leverage points in ascending power: parameters, then feedback strength, then information flows, then rules and incentives, then the system's goal itself. Treat 'we fixed it but it came back' as proof the structure was never changed.",
+    "tags": ["systems-thinking", "feedback-loops", "incentives", "root-cause"],
+    "source_url": null
+  },
+  {
+    "id": "value-true-perceived-expected",
+    "name": "Value: True/Perceived/Expected",
+    "category": "management",
+    "description": "What something is actually worth, what people believe it is worth, and what they anticipated it would be worth are three different forces — satisfaction lives in the gaps.",
+    "prompts": [
+      "What is the true, measurable value being delivered here?",
+      "What do the recipients perceive the value to be, and why does it differ?",
+      "What were they expecting — and is the experience landing above or below that line?",
+      "Which gap is the real problem: under-delivery, under-communication, or over-promising?"
+    ],
+    "system_prompt_template": "Reason through every question using the True/Perceived/Expected Value lens. True value is what something objectively delivers; perceived value is what the recipient believes it delivers; expected value is what they anticipated beforehand. Satisfaction is driven by perceived minus expected, while long-term trust is driven by true value being discovered over time. For each offering or relationship, estimate all three, then diagnose: high true but low perceived means a communication problem; high perceived but low true means an eventual collapse; expectations above delivery means over-promising. Recommend managing all three levers, not just the product.",
+    "tags": ["value", "expectations", "communication", "satisfaction"],
+    "source_url": null
+  },
+  {
+    "id": "region-beta-paradox",
+    "name": "Region-Beta Paradox",
+    "category": "career",
+    "description": "Moderately bad situations last longer than terrible ones, because only terrible ones trigger the escape response.",
+    "prompts": [
+      "What in your life is bad enough to drain you but not bad enough to force action?",
+      "If this situation were 30% worse, what would you do immediately — and why not do it now?",
+      "Where has tolerable mediocrity quietly cost you years?",
+      "What threshold, set in advance, would trigger your exit?"
+    ],
+    "system_prompt_template": "Reason through every question using the Region-Beta Paradox lens: people recover faster from terrible situations than from moderately bad ones, because intense pain triggers escape and repair while tolerable discomfort gets endured indefinitely. For each situation, hunt for the 'tolerable traps' — the okay-ish job, relationship, tool, or habit that is quietly costly precisely because it never crosses the action threshold. Apply the test: if this were dramatically worse, what would the person do at once — and what, besides comfort, stops them doing it now? Recommend pre-committed thresholds that convert slow drains into decision points.",
+    "tags": ["psychology", "inertia", "career-moves", "thresholds"],
+    "source_url": null
+  },
+  {
+    "id": "self-management-101",
+    "name": "Self-Management 101",
+    "category": "career",
+    "description": "Manage yourself like a great manager would: clear priorities, honest feedback loops, protected energy, and deliberate development.",
+    "prompts": [
+      "If you were your own manager, what would you say in this week's one-on-one?",
+      "What are your top three priorities, and does your calendar agree?",
+      "What feedback loop tells you, weekly, whether you are improving?",
+      "What would a great manager stop you from doing right now?"
+    ],
+    "system_prompt_template": "Reason through every question using the Self-Management 101 lens: treat the person as both manager and report, and ask what an excellent manager would do in their situation. That means forcing explicit priorities and checking the calendar against them, building feedback loops that surface drift weekly rather than yearly, protecting energy and focus as managed resources, assigning deliberate development work, and holding honest performance conversations with oneself. Frame advice as that manager would: specific, kind, accountability-creating, and focused on the one or two changes with the highest return.",
+    "tags": ["self-management", "productivity", "career", "feedback"],
+    "source_url": null
+  },
+  {
+    "id": "value-x-irreplaceability",
+    "name": "Value x Irreplaceability",
+    "category": "career",
+    "description": "Compensation and leverage follow the product of how much value you create and how hard you are to replace.",
+    "prompts": [
+      "How much value does your work actually create, in terms the organisation measures?",
+      "How many people could step into your role within a month?",
+      "Which rare combination of skills could you build that competitors can't easily hire for?",
+      "Are you raising your value, your irreplaceability, or neither this year?"
+    ],
+    "system_prompt_template": "Reason through every question using the Value x Irreplaceability lens: career leverage is the product of the value you create and how difficult you are to replace — high value alone gets absorbed if anyone can do it, and rarity alone is worthless if it produces little. For each career question, score both factors honestly: what measurable value does the work create, and how thick is the market of people who could do it? Recommend moves that raise the product — rare skill stacks, owning critical interfaces, compounding domain depth — and warn when effort raises neither factor (busy-ness, generic credentials, replaceable diligence).",
+    "tags": ["career", "leverage", "skills", "compensation"],
+    "source_url": null
+  },
+  {
+    "id": "base-rate-error",
+    "name": "Base Rate Error",
+    "category": "thinking",
+    "description": "Judging by the vivid specifics of a case while ignoring how often that kind of outcome actually occurs in general.",
+    "prompts": [
+      "What is the base rate — how often does this work out across everyone who tries it?",
+      "What makes you believe this case beats the base rate, beyond it being yours?",
+      "Whose outside data could you check before trusting the inside story?",
+      "If you knew nothing about the specifics, what probability would the reference class assign?"
+    ],
+    "system_prompt_template": "Reason through every question using the Base Rate lens: before weighing the vivid specifics of a case, anchor on the reference class — how often does this kind of venture, claim, or diagnosis turn out true across all comparable cases? State the base rate first, then ask what specific evidence justifies deviating from it and by how much. Treat compelling inside stories ('our team is different') as weak updates unless they would have distinguished past winners from losers. When data is missing, estimate the reference class explicitly rather than skipping the step.",
+    "tags": ["probability", "outside-view", "forecasting", "bias"],
+    "source_url": null
+  },
+  {
+    "id": "bayesian-thinking",
+    "name": "Bayesian Thinking",
+    "category": "thinking",
+    "description": "Hold beliefs as probabilities and update them incrementally as evidence arrives, in proportion to its strength.",
+    "prompts": [
+      "What is your prior probability for this belief, stated as a number?",
+      "What new evidence arrived, and how much more likely is it if the belief is true than if it is false?",
+      "What would shift your view by 20 points or more?",
+      "Which beliefs have you not updated despite years of new evidence?"
+    ],
+    "system_prompt_template": "Reason through every question using the Bayesian lens: treat beliefs as probabilities, not binaries. For each question, establish a prior (ideally from base rates), then weigh each piece of evidence by its likelihood ratio — how much more probable is this observation if the hypothesis is true versus false? — and update incrementally. Express conclusions with explicit confidence levels, name what evidence would move them and by roughly how much, and flag both under-updating (clinging to priors) and over-updating (lurching on weak, vivid evidence). Strong evidence is what is hard to explain under the alternatives.",
+    "tags": ["probability", "updating", "evidence", "calibration"],
+    "source_url": null
+  },
+  {
+    "id": "correlation-vs-causation",
+    "name": "Correlation vs. Causation",
+    "category": "thinking",
+    "description": "Two things moving together does not mean one causes the other — confounders, reverse causation, and coincidence must be ruled out first.",
+    "prompts": [
+      "Could the causal arrow run the other way here?",
+      "What third factor could be driving both variables?",
+      "Is the sample selected in a way that manufactures the pattern?",
+      "What intervention or natural experiment would actually test the causal claim?"
+    ],
+    "system_prompt_template": "Reason through every question using the Correlation vs. Causation lens. Whenever two things move together, work through the full set of explanations before accepting cause: X causes Y, Y causes X, a confounder Z drives both, selection effects manufactured the pattern, or it is coincidence in a small sample. For each causal claim encountered or implied, name which alternatives have actually been ruled out and how, and describe what intervention, experiment, or natural comparison would genuinely test causation. Be especially suspicious of correlations that flatter the person citing them.",
+    "tags": ["causality", "statistics", "confounders", "evidence"],
+    "source_url": null
+  },
+  {
+    "id": "false-dichotomies",
+    "name": "False Dichotomies",
+    "category": "thinking",
+    "description": "Most either/or framings hide a richer option space — the two options presented are rarely the only ones.",
+    "prompts": [
+      "Who framed this as a two-option choice, and what does that framing serve?",
+      "What third, fourth, and fifth options exist outside the menu offered?",
+      "Can elements of both options be combined or sequenced rather than chosen between?",
+      "What option becomes visible if you reject the question's premise entirely?"
+    ],
+    "system_prompt_template": "Reason through every question using the False Dichotomies lens: when a problem arrives framed as either/or, treat the framing itself as the first thing to examine. Ask who benefits from the binary, then deliberately expand the option space — hybrids that combine elements of both, sequences that do one then the other, partial versions, delays that buy information, and options that reject the question's premise. Only after laying out the fuller menu should the choice be evaluated. Make 'these are not the only two options' an explicit step in every analysis where a binary appears.",
+    "tags": ["framing", "options", "creativity", "negotiation"],
+    "source_url": null
+  },
+  {
+    "id": "mean-regression",
+    "name": "Mean Regression",
+    "category": "thinking",
+    "description": "Extreme results tend to be followed by more ordinary ones — much apparent improvement or decline is just variance settling back.",
+    "prompts": [
+      "Was this result extreme — and is the follow-up just drifting back toward normal?",
+      "How much of the standout performance was skill, and how much was a lucky draw?",
+      "Are you crediting an intervention for improvement that regression would have produced anyway?",
+      "What does this person's or system's long-run average actually look like?"
+    ],
+    "system_prompt_template": "Reason through every question using the Mean Regression lens: extreme outcomes are usually part luck, so the next observation tends to fall back toward the long-run average — the star quarter disappoints, the disastrous launch is followed by recovery, regardless of intervention. Before crediting any action for a change after an extreme result (criticism after failure, reward after success, a fix after a spike), ask what regression alone would have produced. Distinguish the persistent component (skill, structure) from the transient one (variance), and judge people and strategies on long-run averages, not their most recent extreme.",
+    "tags": ["statistics", "variance", "performance", "attribution"],
+    "source_url": null
+  },
+  {
+    "id": "plausibility-vs-probability",
+    "name": "Plausibility vs. Probability",
+    "category": "thinking",
+    "description": "A detailed, coherent story feels more likely but is mathematically less likely — vividness is not probability.",
+    "prompts": [
+      "Does this scenario feel likely because of evidence, or because it is a good story?",
+      "How many specific conditions must all hold for this scenario to occur?",
+      "What is the boring, less detailed alternative — and isn't it strictly more probable?",
+      "Where are you paying for narrative detail with probability?"
+    ],
+    "system_prompt_template": "Reason through every question using the Plausibility vs. Probability lens: detailed, coherent scenarios feel more likely while every added detail makes them strictly less probable — a story's vividness and its probability pull in opposite directions. For each forecast or explanation, count the conjunctions: how many specific things must all be true? Compare the rich scenario against its boring, general alternative and note that the general one always contains the specific one. Flag narrative seduction in plans (the multi-step path where every step must succeed) and prefer conclusions that survive with the details removed.",
+    "tags": ["forecasting", "narrative-fallacy", "conjunction", "probability"],
+    "source_url": null
+  },
+  {
+    "id": "signal-vs-noise",
+    "name": "Signal vs. Noise",
+    "category": "thinking",
+    "description": "Most fluctuation is noise; the skill is identifying the few changes that carry real information and ignoring the rest.",
+    "prompts": [
+      "Is this movement a real change in the underlying system, or normal fluctuation?",
+      "What is the natural variance of this metric — and is the change outside it?",
+      "How often are you checking, and is the checking frequency manufacturing noise?",
+      "What slow-moving indicator deserves the attention this fast-moving one is consuming?"
+    ],
+    "system_prompt_template": "Reason through every question using the Signal vs. Noise lens: most day-to-day movement in metrics, feedback, markets, and moods is noise — random fluctuation that carries no information — while real signal is rarer and usually slower. For each observation, ask whether the change exceeds the metric's natural variance, whether it persists across independent looks, and whether checking too frequently is itself manufacturing noise. Recommend aggregation: longer windows, larger samples, and trend lines over points. Identify the slow, boring indicators that actually predict outcomes and reallocate attention toward them.",
+    "tags": ["data", "variance", "attention", "metrics"],
+    "source_url": null
+  },
+  {
+    "id": "survivorship-bias",
+    "name": "Survivorship Bias",
+    "category": "thinking",
+    "description": "We study the winners because they are visible — but the lesson is often in the silent graveyard of those who failed doing the same things.",
+    "prompts": [
+      "Whose failures are missing from this dataset of success stories?",
+      "Did the failures do the same things as the winners? If so, what actually separated them?",
+      "Where are the bullet holes you can't see because those planes never came back?",
+      "What would this advice look like if the graveyard could speak?"
+    ],
+    "system_prompt_template": "Reason through every question using the Survivorship Bias lens: visible examples are pre-filtered by survival, so lessons drawn from winners alone are systematically distorted — the dropouts who failed, the startups that copied the same playbook and died, the damaged planes that never returned are all missing from the data. For each pattern or piece of advice, ask who is absent from the sample and whether the failures did the same things as the successes; if they did, the cited factor explains nothing. Seek out graveyard data explicitly, and weight evidence by the full population that started, not the subset that finished.",
+    "tags": ["bias", "selection-effects", "evidence", "success-advice"],
+    "source_url": null
+  },
+  {
+    "id": "via-negativa",
+    "name": "Via Negativa",
+    "category": "thinking",
+    "description": "Improvement often comes from removal — subtracting errors, habits, and clutter beats adding more.",
+    "prompts": [
+      "What could you remove from this situation that would improve it more than any addition?",
+      "Which recurring mistake, if simply stopped, would outperform any new initiative?",
+      "What is on the not-to-do list — and is it actually being enforced?",
+      "Where has accumulation (features, commitments, possessions) become the problem itself?"
+    ],
+    "system_prompt_template": "Reason through every question using the Via Negativa lens: gains from subtraction are systematically undervalued — removing a toxic commitment, a recurring error, a needless feature, or a daily friction often beats any addition, and what you avoid is more knowable than what you should add. For each problem, generate removal options before addition options: what to stop, cancel, delete, decline, or simplify. Build the not-to-do list alongside the to-do list, and check whether the current pain is itself the residue of past accumulation. Treat 'add nothing, remove the worst element' as a candidate answer to every optimisation question.",
+    "tags": ["subtraction", "simplicity", "habits", "minimalism"],
+    "source_url": null
+  },
+  {
+    "id": "inversion",
+    "name": "Inversion",
+    "category": "thinking",
+    "description": "Instead of asking how to succeed, ask what would guarantee failure — then avoid exactly that.",
+    "prompts": [
+      "What would guarantee failure here? List it concretely.",
+      "Which items on that failure list are you currently doing?",
+      "Instead of optimising for the goal, what should you make impossible?",
+      "Whose disaster in this domain can you study and invert?"
+    ],
+    "system_prompt_template": "Reason through every question using the Inversion lens: many problems are easier solved backwards. Instead of asking how to achieve the goal, first ask what would reliably cause failure — the behaviours, decisions, and conditions that would guarantee the worst outcome — then check which of them are already present and design to eliminate them. Work both directions: the forward question ('how do I win?') and the inverted one ('how would I certainly lose, and how do I avoid that?'), and give the inverted answer first. Avoiding stupidity is more tractable than seeking brilliance; make the failure modes explicit in every answer.",
+    "tags": ["inversion", "failure-modes", "problem-solving", "charlie-munger"],
+    "source_url": null
+  }
+]

@@ -26,15 +26,18 @@ import { AnimatePresence } from "framer-motion";
 import { useStore } from "../../store";
 import { MindNode, NodeType } from "../../types";
 import { NodePicker } from "./NodePicker";
-import { nodeTypes } from "../nodes";
+import { nodeTypes, getDefaultSize, getDefaultData } from "../nodes";
 import { DeletableEdge } from "../edges/DeletableEdge";
 import { sounds } from "../../lib/sound";
 
 // ─── Background canvas constants ─────────────────────────────────────────────
 
 const NODE_R = 4.5;
-const GRID_GAP = 20;
-const GRID_DOT_R = 1;
+const GRID_DOT_R = 1.4;
+// How far the dot color is blended toward the text color: 0 = theme's
+// near-invisible dot, 1 = full text color. Keeps the grid legible on every
+// theme without per-theme color entries.
+const GRID_DOT_MIX = 0.35;
 const FLOAT_AMP = 2.5;
 const PARTICLE_COUNT = 3;
 const PARTICLE_SPEED = 0.12;
@@ -68,7 +71,11 @@ function floatOf(id: string): FloatParams {
 
 // ─── Background canvas (behind ReactFlow) ────────────────────────────────────
 
-function BackgroundCanvas({ nodes, edges, liveMode, nodeColor }: { nodes: MindNode[]; edges: { id: string; source: string; target: string }[]; liveMode: boolean; nodeColor: string }) {
+interface BackgroundFx { enabled: boolean; style: "hover" | "proximity" | "ripple"; intensity: number; ambient: boolean; }
+
+type GridColorPreset = "subtle" | "text" | "accent";
+
+function BackgroundCanvas({ nodes, edges, liveMode, nodeColor, gridSize, gridOpacity, gridColor, fx }: { nodes: MindNode[]; edges: { id: string; source: string; target: string }[]; liveMode: boolean; nodeColor: string; gridSize: number; gridOpacity: number; gridColor: GridColorPreset; fx: BackgroundFx }) {
   const rfInstance = useReactFlow();
   const canvasEl = useRef<HTMLCanvasElement>(null);
   const containerEl = useRef<HTMLDivElement>(null);
@@ -78,12 +85,36 @@ function BackgroundCanvas({ nodes, edges, liveMode, nodeColor }: { nodes: MindNo
   const edgesRef = useRef(edges);
   const liveModeRef = useRef(liveMode);
   const nodeColorRef = useRef(nodeColor);
+  const gridSizeRef = useRef(gridSize);
+  const gridOpacityRef = useRef(gridOpacity);
+  const gridColorRef = useRef(gridColor);
+  const fxRef = useRef(fx);
+  const cursorRef = useRef({ x: -1e6, y: -1e6 });
   const floatCache = useRef<Map<string, FloatParams>>(new Map());
 
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { edgesRef.current = edges; }, [edges]);
   useEffect(() => { liveModeRef.current = liveMode; }, [liveMode]);
+  useEffect(() => { gridSizeRef.current = gridSize; }, [gridSize]);
+  useEffect(() => { gridOpacityRef.current = gridOpacity; }, [gridOpacity]);
+  useEffect(() => { gridColorRef.current = gridColor; }, [gridColor]);
   useEffect(() => { nodeColorRef.current = nodeColor; }, [nodeColor]);
+  useEffect(() => { fxRef.current = fx; }, [fx]);
+
+  // Cursor tracking for the ambient/grid reaction. The canvas itself is
+  // pointer-events: none, so listen at the window level in client coords.
+  useEffect(() => {
+    const move = (e: PointerEvent) => { cursorRef.current = { x: e.clientX, y: e.clientY }; };
+    const leave = () => { cursorRef.current = { x: -1e6, y: -1e6 }; };
+    window.addEventListener("pointermove", move, { passive: true });
+    document.documentElement.addEventListener("mouseleave", leave);
+    window.addEventListener("blur", leave);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      document.documentElement.removeEventListener("mouseleave", leave);
+      window.removeEventListener("blur", leave);
+    };
+  }, []);
 
   const draw = useCallback(() => {
     const canvas = canvasEl.current;
@@ -111,20 +142,72 @@ function BackgroundCanvas({ nodes, edges, liveMode, nodeColor }: { nodes: MindNo
     const ns = nodesRef.current;
     const es = edgesRef.current;
 
+    // Cursor in canvas-local coords + effect parameters for this frame.
+    const fxNow = fxRef.current;
+    const cRect = container.getBoundingClientRect();
+    const mx = cursorRef.current.x - cRect.left;
+    const my = cursorRef.current.y - cRect.top;
+    const fxK = Math.max(0, Math.min(1, fxNow.intensity / 100));
+    const fxR = 140 + 240 * fxK;
+    // Ambient layer reacts for the proximity-based styles; "hover" is cards-only.
+    const fxAmbientOn = fxNow.enabled && fxNow.ambient && fxNow.style !== "hover" && fxK > 0;
+    const fxRipple = fxAmbientOn && fxNow.style === "ripple";
+    // smoothstep falloff, 1 at the cursor → 0 at the radius edge
+    const falloff = (px: number, py: number) => {
+      const d = Math.hypot(px - mx, py - my);
+      if (d >= fxR) return 0;
+      const f = 1 - d / fxR;
+      return f * f * (3 - 2 * f);
+    };
+
     // ── Dot grid ──────────────────────────────────────────────────────────────
-    const dotColor = getComputedStyle(document.documentElement).getPropertyValue("--ms-dot").trim() || "#0a0c1e";
-    ctx.fillStyle = dotColor;
-    const gapS = GRID_GAP * zoom;
-    if (gapS > 4) {
+    // Spacing follows the Grid Size setting (same value snapping uses); color
+    // comes from the active theme via the Grid Color preset, faded by the
+    // Grid Opacity setting (0 hides the grid entirely).
+    const rootStyle = getComputedStyle(document.documentElement);
+    const textCol = rootStyle.getPropertyValue("--ms-text").trim() || "#e8eaf2";
+    const [tr, tg, tb] = parseColor(textCol);
+    let gr: number, gg: number, gb: number;
+    if (gridColorRef.current === "text") {
+      [gr, gg, gb] = [tr, tg, tb];
+    } else if (gridColorRef.current === "accent") {
+      [gr, gg, gb] = parseColor(rootStyle.getPropertyValue("--ms-accent").trim() || "#4ecfff");
+    } else {
+      const baseDot = rootStyle.getPropertyValue("--ms-dot").trim() || "#0a0c1e";
+      const [dr, dg, db_] = parseColor(baseDot);
+      const mix = (a: number, b: number) => Math.round(a + (b - a) * GRID_DOT_MIX);
+      [gr, gg, gb] = [mix(dr, tr), mix(dg, tg), mix(db_, tb)];
+    }
+    const baseGridFill = `rgb(${gr}, ${gg}, ${gb})`;
+    const gridAlpha = Math.max(0, Math.min(1, gridOpacityRef.current));
+    const gapS = Math.max(gridSizeRef.current, 8) * zoom;
+    if (gapS > 4 && gridAlpha > 0.01) {
+      ctx.globalAlpha = gridAlpha;
+      ctx.fillStyle = baseGridFill;
       const offX = ((vx % gapS) + gapS) % gapS;
       const offY = ((vy % gapS) + gapS) % gapS;
       for (let gx = offX; gx < W; gx += gapS) {
         for (let gy = offY; gy < H; gy += gapS) {
+          let dotR = GRID_DOT_R;
+          // Ripple style: grid dots near the cursor swell and brighten
+          // (brighten = blend the preset color further toward the text color).
+          if (fxRipple) {
+            const e = falloff(gx, gy);
+            if (e > 0.01) {
+              dotR = GRID_DOT_R * (1 + 1.6 * fxK * e);
+              const m2 = 0.85 * fxK * e;
+              const mix2 = (a: number, b: number) => Math.round(a + (b - a) * m2);
+              ctx.fillStyle = `rgb(${mix2(gr, tr)}, ${mix2(gg, tg)}, ${mix2(gb, tb)})`;
+            } else {
+              ctx.fillStyle = baseGridFill;
+            }
+          }
           ctx.beginPath();
-          ctx.arc(gx, gy, GRID_DOT_R, 0, Math.PI * 2);
+          ctx.arc(gx, gy, dotR, 0, Math.PI * 2);
           ctx.fill();
         }
       }
+      ctx.globalAlpha = 1;
     }
 
     // Plain mode: only the grid, no node dots or edge lines
@@ -190,8 +273,9 @@ function BackgroundCanvas({ nodes, edges, liveMode, nodeColor }: { nodes: MindNo
         ctx.beginPath();
         ctx.moveTo(tx, ty);
         ctx.lineTo(px, py);
-        const pr = PARTICLE_R * zoom;
-        const glowR = pr + 5 * zoom;
+        const pBoost = fxAmbientOn ? falloff(px, py) * fxK : 0;
+        const pr = PARTICLE_R * (1 + 0.6 * pBoost) * zoom;
+        const glowR = pr + (5 + 9 * pBoost) * zoom;
         ctx.strokeStyle = tailGrad;
         ctx.lineWidth = 1.5 * zoom;
         ctx.stroke();
@@ -212,17 +296,20 @@ function BackgroundCanvas({ nodes, edges, liveMode, nodeColor }: { nodes: MindNo
     // ── Node dots ─────────────────────────────────────────────────────────────
     for (const n of ns) {
       const sc = centerMap.get(n.id)!;
+      // Cursor proximity boost: nearby dots glow wider and brighter.
+      const boost = fxAmbientOn ? falloff(sc.x, sc.y) * fxK : 0;
+      const haloR = NODE_R + 8 + 14 * boost;
       // Glow halo
-      const grad = ctx.createRadialGradient(sc.x, sc.y, NODE_R * 0.4, sc.x, sc.y, NODE_R + 8);
-      grad.addColorStop(0, glowColor);
+      const grad = ctx.createRadialGradient(sc.x, sc.y, NODE_R * 0.4, sc.x, sc.y, haloR);
+      grad.addColorStop(0, boost > 0.01 ? `rgba(${cr},${cg},${cb},${(0.32 + 0.38 * boost).toFixed(3)})` : glowColor);
       grad.addColorStop(1, "rgba(0,0,0,0)");
       ctx.beginPath();
-      ctx.arc(sc.x, sc.y, NODE_R + 8, 0, Math.PI * 2);
+      ctx.arc(sc.x, sc.y, haloR, 0, Math.PI * 2);
       ctx.fillStyle = grad;
       ctx.fill();
       // Core dot
       ctx.beginPath();
-      ctx.arc(sc.x, sc.y, NODE_R, 0, Math.PI * 2);
+      ctx.arc(sc.x, sc.y, NODE_R * (1 + 0.5 * boost), 0, Math.PI * 2);
       ctx.fillStyle = dotColor2;
       ctx.fill();
     }
@@ -243,83 +330,94 @@ function BackgroundCanvas({ nodes, edges, liveMode, nodeColor }: { nodes: MindNo
   );
 }
 
+// ─── Hover FX — cursor-proximity reaction for node cards ─────────────────────
+// Styles are applied imperatively to each card's inner element (never to
+// .react-flow__node itself, whose transform React Flow owns) so mouse moves
+// cost zero React re-renders. The "hover" style is pure CSS (data-fx attr on
+// the canvas wrapper); this engine drives "proximity" and "ripple".
+
+function CanvasHoverFX({ wrapperRef, enabled, fxStyle, intensity }: {
+  wrapperRef: React.RefObject<HTMLDivElement | null>;
+  enabled: boolean;
+  fxStyle: "hover" | "proximity" | "ripple";
+  intensity: number;
+}) {
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const reset = () => {
+      wrapper.querySelectorAll<HTMLElement>(".react-flow__node").forEach((nodeEl) => {
+        const el = nodeEl.firstElementChild as HTMLElement | null;
+        if (el) { el.style.filter = ""; el.style.transform = ""; }
+      });
+    };
+    if (!enabled || fxStyle === "hover" || intensity <= 0) { reset(); return; }
+
+    let mouseX = -1e6, mouseY = -1e6;
+    let raf = 0, lastScan = -1e6;
+    let targets: { el: HTMLElement; cx: number; cy: number; r: number; active: boolean }[] = [];
+    const k = Math.min(1, intensity / 100);
+    const radius = 200 + 260 * k;
+
+    const onMove = (e: PointerEvent) => { mouseX = e.clientX; mouseY = e.clientY; };
+    const onLeave = () => { mouseX = -1e6; mouseY = -1e6; };
+
+    const tick = (t: number) => {
+      // Re-measure card rects ~8×/s, not per frame — cheap and close enough,
+      // since pans/zooms only lag the falloff by one scan interval.
+      if (t - lastScan > 120) {
+        lastScan = t;
+        targets = Array.from(wrapper.querySelectorAll<HTMLElement>(".react-flow__node")).flatMap((nodeEl) => {
+          const el = nodeEl.firstElementChild as HTMLElement | null;
+          if (!el) return [];
+          const rect = nodeEl.getBoundingClientRect();
+          return [{
+            el,
+            cx: rect.left + rect.width / 2,
+            cy: rect.top + rect.height / 2,
+            r: Math.max(rect.width, rect.height) / 2,
+            active: el.style.filter !== "",
+          }];
+        });
+      }
+      for (const tgt of targets) {
+        // Distance from the card's edge (not center), so large cards react too
+        const d = Math.max(0, Math.hypot(mouseX - tgt.cx, mouseY - tgt.cy) - tgt.r);
+        const f = 1 - d / radius;
+        if (f > 0.02) {
+          const e = f * f * (3 - 2 * f);
+          tgt.el.style.filter = `brightness(${(1 + 0.22 * k * e).toFixed(3)}) drop-shadow(0 0 ${(16 * k * e).toFixed(1)}px var(--ms-node-glow))`;
+          tgt.el.style.transform = `translateY(${(-4 * k * e).toFixed(2)}px) scale(${(1 + 0.014 * k * e).toFixed(4)})`;
+          tgt.active = true;
+        } else if (tgt.active) {
+          tgt.el.style.filter = "";
+          tgt.el.style.transform = "";
+          tgt.active = false;
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: true });
+    document.documentElement.addEventListener("mouseleave", onLeave);
+    window.addEventListener("blur", onLeave);
+    raf = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("pointermove", onMove);
+      document.documentElement.removeEventListener("mouseleave", onLeave);
+      window.removeEventListener("blur", onLeave);
+      reset();
+    };
+  }, [wrapperRef, enabled, fxStyle, intensity]);
+
+  return null;
+}
+
 // ─── ReactFlow setup ──────────────────────────────────────────────────────────
 
 const edgeTypes = { default: DeletableEdge };
-
-const DEFAULT_NODE_SIZES: Record<NodeType, { width: number; height: number }> = {
-  note: { width: 240, height: 180 },
-  task: { width: 240, height: 200 },
-  calendar: { width: 280, height: 300 },
-  clock: { width: 200, height: 160 },
-  "ai-chat": { width: 300, height: 380 },
-  voice: { width: 240, height: 200 },
-  stt: { width: 240, height: 200 },
-  tts: { width: 240, height: 220 },
-  "project-hub": { width: 240, height: 160 },
-  "web-link": { width: 320, height: 260 },
-  cosmic: { width: 420, height: 380 },
-  file: { width: 280, height: 220 },
-  video: { width: 380, height: 300 },
-  divider: { width: 480, height: 40 },
-  finance: { width: 280, height: 260 },
-  weather: { width: 220, height: 240 },
-  calculator: { width: 260, height: 360 },
-  group: { width: 400, height: 300 },
-  "sticky-note": { width: 200, height: 200 },
-  countdown: { width: 240, height: 170 },
-  hourglass: { width: 200, height: 280 },
-  "world-clock": { width: 240, height: 320 },
-  currency: { width: 260, height: 240 },
-  "code-snippet": { width: 360, height: 280 },
-  markdown: { width: 360, height: 300 },
-  pomodoro: { width: 220, height: 300 },
-  "habit-tracker": { width: 300, height: 340 },
-  kanban: { width: 520, height: 400 },
-  "daily-journal": { width: 320, height: 380 },
-  "github-issues": { width: 320, height: 360 },
-  "bookmark-cluster": { width: 320, height: 280 },
-  "rss-reader": { width: 300, height: 360 },
-  chart: { width: 340, height: 280 },
-};
-
-function getDefaultData(type: NodeType): Record<string, unknown> {
-  switch (type) {
-    case "note": return { title: "New Note", content: "" };
-    case "task": return { title: "New Task", items: [], due_date: null, priority: "medium", status: "todo" };
-    case "calendar": return { linked_canvas_id: null };
-    case "clock": return { mode: "clock", timer_seconds: 300 };
-    case "ai-chat": return { conversations: [], active_conversation_id: null, model: "", system_prompt: "" };
-    case "voice": return { transcript: "", audio_url: null };
-    case "stt": return { transcript: "" };
-    case "tts": return { text: "", voice: "Zephyr" };
-    case "project-hub": return { linked_project_id: null, description: "" };
-    case "web-link": return { url: "", title: "" };
-    case "cosmic": return { mode: "haptic" };
-    case "file": return { fileName: "", fileType: "", content: "", truncated: false };
-    case "video": return { src: "", fileName: "", srcType: "" };
-    case "divider": return { label: "Section", showLabel: true, orientation: "horizontal", color: "", fillColor: "", effect: "solid", labelPosition: "start" };
-    case "finance": return { tickers: [] };
-    case "weather": return { city: "", latitude: null, longitude: null, units: "celsius" };
-    case "calculator": return { expression: "", result: "0", history: [] };
-    case "group": return { label: "Group", color: "" };
-    case "sticky-note": return { content: "", color: "yellow" };
-    case "countdown": return { title: "Countdown", target_date: new Date(Date.now() + 7 * 86400000).toISOString(), show_seconds: true };
-    case "hourglass": return { title: "Focus", duration_minutes: 25, started_at: null, paused_at: null, total_paused_ms: 0 };
-    case "world-clock": return { clocks: [{ id: "utc", label: "UTC", timezone: "UTC" }, { id: "nyc", label: "New York", timezone: "America/New_York" }, { id: "lon", label: "London", timezone: "Europe/London" }] };
-    case "currency": return { base: "USD", targets: ["EUR", "GBP", "JPY", "INR"], amount: 1, rates: {}, last_fetched: null };
-    case "code-snippet": return { title: "Snippet", language: "typescript", code: "" };
-    case "markdown": return { content: "# Hello\n\nWrite **markdown** here." };
-    case "pomodoro": return { work_minutes: 25, break_minutes: 5, long_break_minutes: 15, sessions_before_long: 4, started_at: null, phase: "idle", session_count: 0, paused_remaining_ms: null };
-    case "habit-tracker": return { habits: [], completions: {} };
-    case "kanban": return { columns: [{ id: "todo", title: "To Do", cards: [] }, { id: "inprog", title: "In Progress", cards: [] }, { id: "done", title: "Done", cards: [] }] };
-    case "daily-journal": return { entries: [] };
-    case "github-issues": return { repo: "", token: "", filter: "open", issues: [], last_fetched: null };
-    case "bookmark-cluster": return { bookmarks: [], columns: 3 };
-    case "rss-reader": return { feed_url: "", feed_title: "", items: [], last_fetched: null };
-    case "chart": return { title: "Chart", chart_type: "bar", color: "var(--ms-accent)", dataset: [{ label: "A", value: 4 }, { label: "B", value: 7 }, { label: "C", value: 3 }, { label: "D", value: 9 }] };
-  }
-}
+const FIT_VIEW_OPTIONS = { padding: 0.2, maxZoom: 1.5 };
 
 function toRFNode(n: MindNode): Node {
   return {
@@ -409,6 +507,34 @@ function CanvasInner() {
   );
   const rfEdges: Edge[] = useMemo(() => mindEdges.map(toRFEdge), [mindEdges]);
 
+  const snapGrid = useMemo(
+    () => [settings.grid_size, settings.grid_size] as [number, number],
+    [settings.grid_size]
+  );
+
+  const backgroundFx = useMemo<BackgroundFx>(
+    () => ({
+      enabled: settings.canvas_fx_enabled ?? true,
+      style: settings.canvas_fx_style ?? "proximity",
+      intensity: settings.canvas_fx_intensity ?? 60,
+      ambient: settings.canvas_fx_ambient ?? true,
+    }),
+    [settings.canvas_fx_enabled, settings.canvas_fx_style, settings.canvas_fx_intensity, settings.canvas_fx_ambient]
+  );
+
+  // Stable identity + same-array bail-out: React Flow re-fires selection
+  // handlers when their identity changes, so an inline handler that always
+  // sets a fresh array re-renders forever once nodes exist.
+  const handleSelectionChange = useCallback(
+    ({ nodes }: { nodes: Node[] }) => {
+      setSelectedIds((prev) => {
+        const ids = nodes.map((n) => n.id);
+        return prev.length === ids.length && prev.every((v, i) => v === ids[i]) ? prev : ids;
+      });
+    },
+    []
+  );
+
   // ── Node picker ─────────────────────────────────────────────────────────────
   const openPicker = useCallback((screenX: number, screenY: number) => {
     const flowPos = reactFlowInstance.screenToFlowPosition({ x: screenX, y: screenY });
@@ -425,7 +551,7 @@ function CanvasInner() {
 
   const handlePickerSelect = useCallback(async (type: NodeType) => {
     if (!activeCanvasId || !picker) return;
-    const size = DEFAULT_NODE_SIZES[type];
+    const size = getDefaultSize(type);
     await addNode({
       canvas_id: activeCanvasId, type,
       x: picker.flowPos.x - size.width / 2,
@@ -686,13 +812,36 @@ function CanvasInner() {
   return (
     <div
       ref={reactFlowWrapper}
-      className={settings.edge_particles ? "live-mode" : "plain-mode"}
-      style={{ flex: 1, width: "100%", height: "100%", position: "relative", ["--ms-node-dot" as any]: settings.node_color || "var(--ms-accent)" }}
+      className={`ms-flow-wrap ${settings.edge_particles ? "live-mode" : "plain-mode"}`}
+      data-fx={settings.canvas_fx_enabled && (settings.canvas_fx_cards ?? true) ? settings.canvas_fx_style : "off"}
+      style={{
+        flex: 1, width: "100%", height: "100%", position: "relative",
+        ["--ms-node-dot" as any]: settings.node_color || "var(--ms-accent)",
+        ["--ms-node-opacity" as any]: settings.node_opacity ?? 1,
+        ["--ms-fx-k" as any]: Math.min(1, (settings.canvas_fx_intensity ?? 60) / 100),
+      }}
       onKeyDown={handleKeyDown}
       tabIndex={-1}
     >
       {/* Dot-grid + glow-dot background canvas — always behind ReactFlow */}
-      <BackgroundCanvas nodes={mindNodes} edges={mindEdges} liveMode={settings.edge_particles ?? true} nodeColor={settings.node_color ?? ""} />
+      <BackgroundCanvas
+        nodes={mindNodes}
+        edges={mindEdges}
+        liveMode={settings.edge_particles ?? true}
+        nodeColor={settings.node_color ?? ""}
+        gridSize={settings.grid_size ?? 20}
+        gridOpacity={settings.grid_opacity ?? 1}
+        gridColor={settings.grid_color ?? "subtle"}
+        fx={backgroundFx}
+      />
+
+      {/* Cursor-proximity reaction for the node cards (imperative, no re-renders) */}
+      <CanvasHoverFX
+        wrapperRef={reactFlowWrapper}
+        enabled={(settings.canvas_fx_enabled ?? true) && (settings.canvas_fx_cards ?? true)}
+        fxStyle={settings.canvas_fx_style ?? "proximity"}
+        intensity={settings.canvas_fx_intensity ?? 60}
+      />
 
       <ReactFlow
         nodes={rfNodes}
@@ -705,12 +854,12 @@ function CanvasInner() {
         onNodesDelete={handleNodesDelete}
         onEdgesDelete={handleEdgesDelete}
         onPaneClick={() => { setPicker(null); setNodeMenu(null); }}
-        onSelectionChange={({ nodes }) => setSelectedIds(nodes.map((n) => n.id))}
+        onSelectionChange={handleSelectionChange}
         onPaneContextMenu={handlePaneContextMenu}
         onNodeContextMenu={handleNodeContextMenu}
         onDoubleClick={handlePaneDoubleClick}
         snapToGrid={settings.snap_to_grid}
-        snapGrid={[settings.grid_size, settings.grid_size]}
+        snapGrid={snapGrid}
         deleteKeyCode={["Backspace", "Delete"]}
         panOnScroll={true}
         panOnDrag={true}
@@ -720,7 +869,7 @@ function CanvasInner() {
         onSelectionDragStop={handleSelectionDragStop}
         zoomOnDoubleClick={false}
         fitView
-        fitViewOptions={{ padding: 0.2, maxZoom: 1.5 }}
+        fitViewOptions={FIT_VIEW_OPTIONS}
         minZoom={0.1}
         maxZoom={3}
         style={{ background: "transparent", position: "relative", zIndex: 1 }}

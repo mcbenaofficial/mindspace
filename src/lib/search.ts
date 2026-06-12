@@ -54,6 +54,9 @@ export function extractSearchText(type: string, data: any): { title: string; bod
   if ((type === "note" || type === "daily-journal") && typeof d.content === "string") {
     d.content = tiptapText(d.content);
   }
+  if (type === "mental-model" && typeof d.summary === "string") {
+    d.summary = tiptapText(d.summary);
+  }
   const out: string[] = [];
   collectStrings(d, out);
   return { title, body: out.join(" ").slice(0, 30000) };
@@ -78,34 +81,61 @@ export async function initSearchIndex(): Promise<void> {
         `CREATE TABLE IF NOT EXISTS search_index_plain (node_id TEXT PRIMARY KEY, canvas_id TEXT, project_id TEXT, type TEXT, title TEXT, body TEXT)`
       );
     }
-    await rebuildSearchIndex();
+    await syncSearchIndex();
   })();
   return initPromise;
 }
 
+// Rebuild only when the index has drifted from the vault. Skipping the
+// no-op case keeps boot fast and avoids rebuilding inside the busy startup
+// window every launch. Retries with growing delays so a rebuild that
+// collides with boot-time DB traffic converges once things settle.
+async function syncSearchIndex(): Promise<void> {
+  const db = await getDb();
+  for (const delayMs of [0, 2000, 8000]) {
+    if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+    try {
+      const [n] = await db.select<{ c: number }[]>(`SELECT COUNT(*) AS c FROM nodes`);
+      const [i] = await db.select<{ c: number }[]>(`SELECT COUNT(*) AS c FROM ${table()}`);
+      if ((n?.c ?? 0) === (i?.c ?? 0)) return;
+      await rebuildSearchIndex();
+    } catch (err) {
+      console.warn("Search index sync attempt failed:", err);
+    }
+  }
+}
+
+// No explicit transaction here: tauri-plugin-sql runs statements on a
+// connection pool, so raw BEGIN/COMMIT can land on different connections
+// and abort mid-rebuild (which left the index empty). Per-row inserts with
+// per-row error tolerance converge instead, and syncSearchIndex retries the
+// rebuild on the next launch if anything was missed.
 export async function rebuildSearchIndex(): Promise<void> {
   const db = await getDb();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows = await db.select<any[]>(
     `SELECT n.id, n.canvas_id, n.type, n.data, c.project_id FROM nodes n JOIN canvases c ON c.id = n.canvas_id`
   );
-  await db.execute("BEGIN");
-  try {
-    await db.execute(`DELETE FROM ${table()}`);
-    for (const r of rows) {
-      let parsed = {};
-      try { parsed = JSON.parse(r.data); } catch { /* leave empty */ }
-      const { title, body } = extractSearchText(r.type, parsed);
+  await db.execute(`DELETE FROM ${table()}`);
+  let failed = 0;
+  for (const r of rows) {
+    let parsed = {};
+    let title = "", body = "";
+    try {
+      parsed = JSON.parse(r.data);
+      ({ title, body } = extractSearchText(r.type, parsed));
+    } catch { /* index the row with empty text rather than aborting */ }
+    try {
       await db.execute(
         `INSERT INTO ${table()} (node_id, canvas_id, project_id, type, title, body) VALUES (?, ?, ?, ?, ?, ?)`,
         [r.id, r.canvas_id, r.project_id, r.type, title, body]
       );
+    } catch (err) {
+      if (!failed) console.warn("Search index insert failed:", err);
+      failed++;
     }
-    await db.execute("COMMIT");
-  } catch (err) {
-    await db.execute("ROLLBACK").catch(() => {});
-    throw err;
   }
+  if (failed) console.warn(`Search index rebuild: ${failed}/${rows.length} rows failed; will retry on next sync`);
 }
 
 export async function upsertNodeIndex(node: {

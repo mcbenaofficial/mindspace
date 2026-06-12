@@ -63,32 +63,29 @@ export async function importCanvas(file: File, projectId: string): Promise<strin
   const now = new Date().toISOString();
 
   const db = await getDb();
-  await db.execute("BEGIN");
-  try {
-    for (const n of payload.nodes) {
-      await db.execute(
-        "INSERT INTO nodes (id, canvas_id, type, x, y, width, height, z_index, locked, parent_id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [
-          idMap.get(n.id), canvas.id, n.type, n.x, n.y, n.width, n.height,
-          n.z_index ?? 0, n.locked ? 1 : 0,
-          n.parent_id ? idMap.get(n.parent_id) ?? null : null,
-          JSON.stringify(n.data ?? {}), n.created_at ?? now, now,
-        ]
-      );
-    }
-    for (const e of payload.edges ?? []) {
-      const source = idMap.get(e.source);
-      const target = idMap.get(e.target);
-      if (!source || !target) continue;
-      await db.execute(
-        "INSERT INTO edges (id, canvas_id, source, target) VALUES (?, ?, ?, ?)",
-        [generateId(), canvas.id, source, target]
-      );
-    }
-    await db.execute("COMMIT");
-  } catch (err) {
-    await db.execute("ROLLBACK").catch(() => {});
-    throw err;
+  // No raw BEGIN/COMMIT — the SQL plugin's pool can split a transaction
+  // across connections and abort it. The canvas row already exists, so a
+  // mid-import failure just yields a partially filled canvas (nodes land
+  // before the edges that reference them), never dangling references.
+  for (const n of payload.nodes) {
+    await db.execute(
+      "INSERT INTO nodes (id, canvas_id, type, x, y, width, height, z_index, locked, parent_id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [
+        idMap.get(n.id), canvas.id, n.type, n.x, n.y, n.width, n.height,
+        n.z_index ?? 0, n.locked ? 1 : 0,
+        n.parent_id ? idMap.get(n.parent_id) ?? null : null,
+        JSON.stringify(n.data ?? {}), n.created_at ?? now, now,
+      ]
+    );
+  }
+  for (const e of payload.edges ?? []) {
+    const source = idMap.get(e.source);
+    const target = idMap.get(e.target);
+    if (!source || !target) continue;
+    await db.execute(
+      "INSERT INTO edges (id, canvas_id, source, target) VALUES (?, ?, ?, ?)",
+      [generateId(), canvas.id, source, target]
+    );
   }
 
   store.setActiveCanvas(canvas.id);

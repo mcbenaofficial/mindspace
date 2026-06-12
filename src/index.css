@@ -64,6 +64,24 @@ html, body {
 .react-flow__background { background: var(--ms-bg) !important; }
 .react-flow__node { background: transparent !important; }
 
+/* ─── Node color / visibility / hover FX (Settings > Canvas) ────────────── */
+/* --ms-node-dot, --ms-node-opacity and --ms-fx-k are set inline on the
+   canvas wrapper from settings; --ms-node-glow derives the FX glow color. */
+.ms-flow-wrap {
+  --ms-node-glow: color-mix(in srgb, var(--ms-node-dot, var(--ms-accent)) 50%, transparent);
+}
+.ms-flow-wrap .react-flow__node { opacity: var(--ms-node-opacity, 1); }
+
+/* Direct-hover effect style: only the card under the cursor reacts */
+.ms-flow-wrap[data-fx="hover"] .react-flow__node > :first-child {
+  transition: filter 0.18s ease, transform 0.18s ease;
+}
+.ms-flow-wrap[data-fx="hover"] .react-flow__node:hover > :first-child {
+  filter: brightness(calc(1 + 0.2 * var(--ms-fx-k, 0.6)))
+          drop-shadow(0 0 calc(16px * var(--ms-fx-k, 0.6)) var(--ms-node-glow));
+  transform: translateY(calc(-4px * var(--ms-fx-k, 0.6))) scale(calc(1 + 0.014 * var(--ms-fx-k, 0.6)));
+}
+
 /* Edges — vibrant glowing connectors */
 .react-flow__edge-path {
   stroke: var(--ms-accent) !important;
@@ -177,8 +195,8 @@ html, body {
   border-color: var(--ms-border-2);
 }
 .ms-node.selected {
-  box-shadow: var(--ms-shadow-lg), var(--ms-glow-strong);
-  border-color: var(--ms-accent);
+  box-shadow: var(--ms-shadow-lg), 0 0 22px color-mix(in srgb, var(--ms-node-dot, var(--ms-accent)) 35%, transparent);
+  border-color: var(--ms-node-dot, var(--ms-accent));
 }
 
 .ms-node-header {
@@ -295,21 +313,4 @@ html, body {
   box-shadow: var(--ms-glow) !important;
 }
 
-/* ─── Locked node badge ──────────────────────────────────────────────────── */
-.react-flow__node.ms-node-locked::after {
-  content: "🔒";
-  position: absolute;
-  top: -8px;
-  left: -8px;
-  font-size: 10px;
-  background: var(--ms-surface);
-  border: 1px solid var(--ms-border);
-  border-radius: 50%;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-  pointer-events: none;
-}
+/* Locked node badge is rendered by withNodeBoundary (lucide Lock icon). */

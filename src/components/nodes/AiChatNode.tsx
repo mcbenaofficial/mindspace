@@ -1,14 +1,22 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Handle, Position, NodeProps, Node, NodeResizer, useUpdateNodeInternals } from "@xyflow/react";
 import { useCmdKey } from '../../hooks/useCmdKey';
 import { motion, AnimatePresence } from "framer-motion";
-import { Bot, Send, Trash2, Copy, Check, Plus, ChevronLeft, ChevronRight, MessageSquare, Paperclip, X, FileText } from "lucide-react";
+import { Bot, Brain, Focus, Send, Square, Trash2, Copy, Check, Plus, ChevronLeft, ChevronRight, MessageSquare, Paperclip, X, FileText } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { invoke } from "@tauri-apps/api/core";
-import { isTauri } from "../../lib/tauri-compat";
+import { streamChatCompletion, StreamHandle } from "../../lib/aiStream";
+import { MentalModel, getModelById } from "../../lib/mentalModels";
+import LensPicker from "../LensPicker";
+import { retrievePassages, BrainPassage } from "../../lib/brain/retrieve";
+import { jumpToNode } from "../../lib/brain/navigation";
 import { useStore } from "../../store";
-import { MindNode, AiChatData, AiChatConversation, AiChatMessage, AiChatAttachment, NoteData, TaskData, VoiceData, WebLinkData, FileData } from "../../types";
+import { MindNode, AiChatData, AiChatConversation, AiChatMessage, AiChatAttachment, BrainCitation, NoteData, TaskData, VoiceData, WebLinkData, FileData } from "../../types";
+import { useModelSuggestions, ModelSuggestionChips } from "../canvas/ModelSuggestionChips";
+
+function stripRefs(s: string): string {
+  return s.replace(/\s*\[ref:[\w-]+\]/g, "");
+}
 
 export type AiChatNodeType = Node<{ mindNode: MindNode }, "ai-chat">;
 
@@ -186,12 +194,56 @@ export function AiChatNode({ data, selected }: NodeProps<AiChatNodeType>) {
 
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [streamText, setStreamText] = useState<string | null>(null);
   const [hoveredMsg, setHoveredMsg] = useState<string | null>(null);
   const [copiedMsg, setCopiedMsg] = useState<string | null>(null);
   const [hoveredConvId, setHoveredConvId] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  // Lens is session-only by design: component state, never written to node
+  // data, so closing the node resets it to None.
+  const [activeLens, setActiveLens] = useState<MentalModel | null>(null);
+  const [lensPickerOpen, setLensPickerOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const streamRef = useRef<StreamHandle | null>(null);
+
+  // Edge-derived lens: wiring this chat to a Mental Model node (either
+  // direction) activates that model as the lens; removing the wiring clears
+  // it again. A manual pick still wins until the wiring changes — removal
+  // only clears the lens the wiring itself set. The edge is persisted, so a
+  // wired lens survives restarts even though the lens state itself doesn't.
+  const wiredLensIdRef = useRef<string | null>(null);
+  const wiredModelId = useMemo(() => {
+    let found: string | null = null;
+    for (const e of edges) {
+      const otherId =
+        e.source === mindNode.id ? e.target :
+        e.target === mindNode.id ? e.source : null;
+      if (!otherId) continue;
+      const other = nodes.find(n => n.id === otherId);
+      if (other?.type !== "mental-model") continue;
+      const mid = (other.data as { model_id?: string | null }).model_id;
+      if (mid) found = mid; // multiple wired models: last edge wins
+    }
+    return found;
+  }, [edges, nodes, mindNode.id]);
+
+  useEffect(() => {
+    const prevWired = wiredLensIdRef.current;
+    if (wiredModelId === prevWired) return;
+    wiredLensIdRef.current = wiredModelId;
+    if (wiredModelId) {
+      let cancelled = false;
+      getModelById(wiredModelId)
+        .then(m => { if (!cancelled && m) setActiveLens(m); })
+        .catch(() => { /* library unreadable — keep current lens */ });
+      return () => { cancelled = true; };
+    }
+    setActiveLens(prev => (prev && prev.id === prevWired ? null : prev));
+  }, [wiredModelId]);
+
+  // Ambient model suggestions on the draft input (before send).
+  const sugg = useModelSuggestions(mindNode.id, inputValue, !!selected);
 
   useEffect(() => {
     if (!Array.isArray((mindNode.data as any)?.conversations)) {
@@ -209,7 +261,7 @@ export function AiChatNode({ data, selected }: NodeProps<AiChatNodeType>) {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeConv?.messages.length, isTyping]);
+  }, [activeConv?.messages.length, isTyping, streamText]);
 
   // ── Conversation management ─────────────────────────────────────────────────
   const newConversation = useCallback((e: React.MouseEvent) => {
@@ -370,38 +422,54 @@ export function AiChatNode({ data, selected }: NodeProps<AiChatNodeType>) {
         .filter(n => connectedIds.includes(n.id) && n.id !== mindNode.id)
         .map(buildNodeContext).filter(Boolean) as string[];
 
+      // Brain mode: retrieve the most relevant passages from the whole vault.
+      let passages: BrainPassage[] = [];
+      if (chatData.brain_enabled) {
+        try { passages = await retrievePassages(apiText || displayText, 8); } catch { /* offline → no vault context */ }
+      }
+
       let systemContent = "";
+      // Active lens frames everything that follows — injected first.
+      if (activeLens?.system_prompt_template) {
+        systemContent += `${activeLens.system_prompt_template.trim()}\n\n`;
+      }
+      if (passages.length > 0) {
+        const ctx = passages
+          .map(p => `[ref:${p.nodeId}] ${p.projectName} / ${p.canvasName} — ${p.title}: ${p.text.slice(0, 600)}`)
+          .join("\n\n");
+        systemContent += `You have access to the user's personal knowledge vault. Relevant passages below. When you use one, cite it inline with its [ref:...] marker exactly as given.\n\n${ctx}\n\n`;
+      }
       if (contextParts.length > 0) systemContent += `You have access to the following context from connected nodes:\n\n${contextParts.join("\n\n")}\n\n`;
       if (chatData.system_prompt) systemContent += chatData.system_prompt;
       if (systemContent) apiMessages.unshift({ role: "system", content: systemContent });
 
       const url = (settings.lmstudio_url || "http://127.0.0.1:1234") + "/v1/chat/completions";
-      const payload = JSON.stringify({
-        model: settings.lmstudio_model || chatData.model || "local-model",
-        messages: apiMessages,
-        temperature: 0.7,
-        max_tokens: settings.lmstudio_max_tokens || 1024,
-      });
 
-      let json: any;
-      if (isTauri()) {
-        const res = await invoke<{ status: number; body: string }>("http_post", { url, body: payload, apiKey: null });
-        if (res.status < 200 || res.status >= 300) {
-          let detail = "";
-          try { detail = JSON.parse(res.body)?.error?.message || res.body; } catch { detail = res.body; }
-          throw new Error(`API error ${res.status}: ${detail}`);
-        }
-        json = JSON.parse(res.body);
-      } else {
-        const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: payload });
-        if (!resp.ok) throw new Error(`API error ${resp.status}`);
-        json = await resp.json();
-      }
+      setStreamText("");
+      const handle = streamChatCompletion({
+        url,
+        body: {
+          model: settings.lmstudio_model || chatData.model || "local-model",
+          messages: apiMessages,
+          temperature: 0.7,
+          max_tokens: settings.lmstudio_max_tokens || 1024,
+        },
+        onDelta: setStreamText,
+      });
+      streamRef.current = handle;
+      const full = await handle.promise;
+
+      const refIds = [...new Set([...full.matchAll(/\[ref:([\w-]+)\]/g)].map(m => m[1]))];
+      const citations = refIds
+        .map(id => passages.find(p => p.nodeId === id))
+        .filter(Boolean)
+        .map(p => ({ nodeId: p!.nodeId, canvasId: p!.canvasId, projectId: p!.projectId, title: p!.title }));
 
       const assistantMsg: AiChatMessage = {
         id: genId(), role: "assistant",
-        content: json.choices?.[0]?.message?.content ?? "(no response)",
+        content: full || "(no response)",
         timestamp: new Date().toISOString(),
+        citations: citations.length > 0 ? citations : undefined,
       };
       await updateNode(mindNode.id, { data: patchData([...updatedConv.messages, assistantMsg]) });
     } catch (err) {
@@ -412,9 +480,11 @@ export function AiChatNode({ data, selected }: NodeProps<AiChatNodeType>) {
       };
       await updateNode(mindNode.id, { data: patchData([...updatedConv.messages, errMsg]) });
     } finally {
+      streamRef.current = null;
+      setStreamText(null);
       setIsTyping(false);
     }
-  }, [inputValue, pendingFiles, isTyping, activeConv, chatData, mindNode.id, updateNode, settings, nodes, edges]);
+  }, [inputValue, pendingFiles, isTyping, activeConv, chatData, mindNode.id, updateNode, settings, nodes, edges, activeLens]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); handleSend(); }
@@ -457,6 +527,12 @@ export function AiChatNode({ data, selected }: NodeProps<AiChatNodeType>) {
             <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "var(--ms-text)" }}>AI Chat</span>
             <span style={{ fontSize: 10, color: "var(--ms-text-muted)" }}>{settings.lmstudio_model || "local"}</span>
           </>
+        )}
+        {activeLens && (
+          <span
+            title={`Lens active: ${activeLens.name}`}
+            style={{ width: 4, height: 4, borderRadius: "50%", background: "#EF9F27", flexShrink: 0 }}
+          />
         )}
         <button onClick={newConversation} title="New conversation"
           style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 4px", color: "var(--ms-text-muted)", display: "flex", alignItems: "center", flexShrink: 0 }}>
@@ -585,9 +661,29 @@ export function AiChatNode({ data, selected }: NodeProps<AiChatNodeType>) {
                       }}>
                         {isUser ? msg.content : (
                           <div className="ms-chat-md">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{stripRefs(msg.content)}</ReactMarkdown>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {/* Vault citations */}
+                    {!isUser && msg.citations && msg.citations.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxWidth: "90%" }}>
+                        {msg.citations.map((c: BrainCitation) => (
+                          <button key={c.nodeId}
+                            onClick={e => { e.stopPropagation(); jumpToNode(c.nodeId, c.canvasId, c.projectId); }}
+                            title={`Jump to "${c.title}"`}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 4,
+                              background: "var(--ms-accent-15)", border: "1px solid var(--ms-accent-25)",
+                              borderRadius: 10, padding: "2px 8px", fontSize: 9.5,
+                              color: "var(--ms-accent)", cursor: "pointer", maxWidth: 150,
+                            }}>
+                            <Brain size={9} style={{ flexShrink: 0 }} />
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</span>
+                          </button>
+                        ))}
                       </div>
                     )}
 
@@ -601,8 +697,25 @@ export function AiChatNode({ data, selected }: NodeProps<AiChatNodeType>) {
                   </div>
                 );
               })}
+              {/* Live streaming bubble — replaced by the persisted message at stream end */}
+              {streamText !== null && streamText.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+                  <div style={{
+                    maxWidth: "90%", padding: "7px 10px",
+                    borderRadius: "12px 12px 12px 3px",
+                    background: "var(--ms-surface)",
+                    border: "1px solid var(--ms-border)",
+                    color: "var(--ms-text)",
+                    fontSize: 11, lineHeight: 1.6, userSelect: "text", wordBreak: "break-word",
+                  }}>
+                    <div className="ms-chat-md">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{stripRefs(streamText)}</ReactMarkdown>
+                    </div>
+                  </div>
+                </div>
+              )}
               <AnimatePresence>
-                {isTyping && (
+                {isTyping && !streamText && (
                   <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 4 }}
                     style={{ display: "flex", justifyContent: "flex-start" }}>
                     <div style={{ background: "var(--ms-border)", borderRadius: "10px 10px 10px 2px" }}>
@@ -625,8 +738,19 @@ export function AiChatNode({ data, selected }: NodeProps<AiChatNodeType>) {
             )}
 
             {/* Input bar */}
-            <div style={{ padding: "6px 8px", borderTop: "1px solid var(--ms-border)", display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}
+            <div style={{ padding: "6px 8px", borderTop: "1px solid var(--ms-border)", display: "flex", gap: 6, alignItems: "center", flexShrink: 0, position: "relative" }}
               onClick={e => e.stopPropagation()}>
+
+              {/* Lens picker dropdown — anchored above the input bar */}
+              {lensPickerOpen && (
+                <div style={{ position: "absolute", bottom: "calc(100% + 4px)", left: 8, zIndex: 30 }}>
+                  <LensPicker
+                    value={activeLens}
+                    onChange={m => { setActiveLens(m); setLensPickerOpen(false); }}
+                    onClose={() => setLensPickerOpen(false)}
+                  />
+                </div>
+              )}
 
               {/* Hidden file input */}
               <input
@@ -637,6 +761,48 @@ export function AiChatNode({ data, selected }: NodeProps<AiChatNodeType>) {
                 style={{ display: "none" }}
                 onChange={handleFileSelect}
               />
+
+              {/* Brain toggle — answers retrieve from the whole vault when on */}
+              <button
+                onClick={e => { e.stopPropagation(); updateNode(mindNode.id, { data: { ...chatData, brain_enabled: !chatData.brain_enabled } }); }}
+                title={chatData.brain_enabled ? "Brain ON — replies use your whole vault" : "Brain OFF — click to use your whole vault"}
+                style={{
+                  background: chatData.brain_enabled ? "var(--ms-accent-15)" : "none",
+                  border: chatData.brain_enabled ? "1px solid var(--ms-accent-25)" : "1px solid transparent",
+                  borderRadius: 6, cursor: "pointer", padding: 4,
+                  color: chatData.brain_enabled ? "var(--ms-accent)" : "var(--ms-text-muted)",
+                  display: "flex", alignItems: "center", flexShrink: 0, transition: "color 0.15s",
+                }}>
+                <Brain size={13} />
+              </button>
+
+              {/* Lens pill — mental-model reasoning lens for this session */}
+              <button
+                onClick={e => { e.stopPropagation(); setLensPickerOpen(o => !o); }}
+                title={activeLens ? `Lens: ${activeLens.name} — replies reason through this mental model` : "Lens: None — apply a mental model to this chat"}
+                style={{
+                  background: activeLens ? "rgba(239,159,39,0.12)" : "none",
+                  border: activeLens ? "1px solid rgba(239,159,39,0.3)" : "1px solid transparent",
+                  borderRadius: 6, cursor: "pointer", padding: 4,
+                  color: activeLens ? "#EF9F27" : "var(--ms-text-muted)",
+                  display: "flex", alignItems: "center", gap: 4, flexShrink: 1, minWidth: 0, transition: "color 0.15s",
+                }}>
+                <Focus size={13} style={{ flexShrink: 0 }} />
+                {activeLens && (
+                  <>
+                    <span style={{ fontSize: 10, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 80 }}>
+                      {activeLens.name}
+                    </span>
+                    <span
+                      role="button"
+                      title="Clear lens"
+                      onClick={e => { e.stopPropagation(); setActiveLens(null); setLensPickerOpen(false); }}
+                      style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+                      <X size={10} />
+                    </span>
+                  </>
+                )}
+              </button>
 
               {/* Attach button */}
               <button
@@ -661,11 +827,19 @@ export function AiChatNode({ data, selected }: NodeProps<AiChatNodeType>) {
                 disabled={isTyping}
                 style={{ flex: 1, background: "var(--ms-border)", border: "1px solid transparent", borderRadius: 6, color: "var(--ms-text)", fontSize: 11, padding: "5px 8px", outline: "none", userSelect: "text", cursor: "text" }}
               />
-              <button onClick={e => { e.stopPropagation(); handleSend(); }}
-                disabled={isTyping || (!inputValue.trim() && pendingFiles.length === 0)}
-                style={{ padding: "5px 10px", background: "var(--ms-accent)", border: "none", borderRadius: 6, color: "var(--ms-bg)", cursor: (isTyping || (!inputValue.trim() && pendingFiles.length === 0)) ? "not-allowed" : "pointer", opacity: (isTyping || (!inputValue.trim() && pendingFiles.length === 0)) ? 0.5 : 1, transition: "opacity 0.1s", display: "flex", alignItems: "center" }}>
-                <Send size={12} />
-              </button>
+              {isTyping ? (
+                <button onClick={e => { e.stopPropagation(); streamRef.current?.stop(); }}
+                  title="Stop generating"
+                  style={{ padding: "5px 10px", background: "var(--ms-border)", border: "1px solid var(--ms-accent-25)", borderRadius: 6, color: "var(--ms-accent)", cursor: "pointer", display: "flex", alignItems: "center" }}>
+                  <Square size={11} />
+                </button>
+              ) : (
+                <button onClick={e => { e.stopPropagation(); handleSend(); }}
+                  disabled={!inputValue.trim() && pendingFiles.length === 0}
+                  style={{ padding: "5px 10px", background: "var(--ms-accent)", border: "none", borderRadius: 6, color: "var(--ms-bg)", cursor: (!inputValue.trim() && pendingFiles.length === 0) ? "not-allowed" : "pointer", opacity: (!inputValue.trim() && pendingFiles.length === 0) ? 0.5 : 1, transition: "opacity 0.1s", display: "flex", alignItems: "center" }}>
+                  <Send size={12} />
+                </button>
+              )}
             </div>
           </motion.div>
         )}
@@ -675,6 +849,8 @@ export function AiChatNode({ data, selected }: NodeProps<AiChatNodeType>) {
       <Handle type="source" position={Position.Bottom} />
       <Handle type="target" position={Position.Left} />
       <Handle type="source" position={Position.Right} />
+
+      <ModelSuggestionChips sourceNode={mindNode} models={sugg.models} onDismiss={sugg.dismiss} onClear={sugg.clear} />
     </motion.div>
   );
 }

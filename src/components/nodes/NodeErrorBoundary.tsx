@@ -1,5 +1,6 @@
 import React from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Lock } from "lucide-react";
+import { MindNode } from "../../types";
 
 interface BoundaryState {
   error: Error | null;
@@ -49,15 +50,36 @@ class NodeErrorBoundary extends React.Component<{ children: React.ReactNode }, B
   }
 }
 
+function LockBadge() {
+  return (
+    <span
+      style={{
+        position: "absolute", top: -8, left: -8,
+        width: 20, height: 20, borderRadius: "50%",
+        background: "var(--ms-surface)", border: "1px solid var(--ms-border)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 10, pointerEvents: "none", color: "var(--ms-text-muted)",
+      }}
+    >
+      <Lock size={9} />
+    </span>
+  );
+}
+
 // Wraps a canvas node component in an error boundary (one crashing node must
-// not take down the whole canvas) and React.memo.
+// not take down the whole canvas), React.memo, and the lock badge overlay.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function withNodeBoundary<P extends object>(Component: React.ComponentType<P>): any {
-  const Wrapped: React.FC<P> = (props) => (
-    <NodeErrorBoundary>
-      <Component {...props} />
-    </NodeErrorBoundary>
-  );
+  const Wrapped: React.FC<P> = (props) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mindNode = (props as any)?.data?.mindNode as MindNode | undefined;
+    return (
+      <NodeErrorBoundary>
+        <Component {...props} />
+        {mindNode?.locked && <LockBadge />}
+      </NodeErrorBoundary>
+    );
+  };
   Wrapped.displayName = `withNodeBoundary(${Component.displayName || Component.name || "Node"})`;
   return React.memo(Wrapped);
 }

@@ -10,14 +10,12 @@ export type CurrencyNodeType = Node<{ mindNode: MindNode }, "currency">;
 
 const ACCENT = "#10b981";
 
-const FLAG: Record<string, string> = {
-  USD: "🇺🇸", EUR: "🇪🇺", GBP: "🇬🇧", JPY: "🇯🇵", INR: "🇮🇳",
-  AUD: "🇦🇺", CAD: "🇨🇦", CHF: "🇨🇭", CNY: "🇨🇳", KRW: "🇰🇷",
-  BRL: "🇧🇷", MXN: "🇲🇽", SGD: "🇸🇬", HKD: "🇭🇰", NOK: "🇳🇴",
-  SEK: "🇸🇪", DKK: "🇩🇰", NZD: "🇳🇿", ZAR: "🇿🇦", RUB: "🇷🇺",
-};
-
-const ALL_CURRENCIES = Object.keys(FLAG);
+const ALL_CURRENCIES = [
+  "USD", "EUR", "GBP", "JPY", "INR",
+  "AUD", "CAD", "CHF", "CNY", "KRW",
+  "BRL", "MXN", "SGD", "HKD", "NOK",
+  "SEK", "DKK", "NZD", "ZAR", "RUB",
+];
 
 function minutesAgo(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -178,7 +176,7 @@ export function CurrencyNode({ data, selected }: NodeProps<CurrencyNodeType>) {
             }}
           >
             {ALL_CURRENCIES.map((c) => (
-              <option key={c} value={c}>{FLAG[c] ?? ""} {c}</option>
+              <option key={c} value={c}>{c}</option>
             ))}
           </select>
         </div>
@@ -208,8 +206,12 @@ export function CurrencyNode({ data, selected }: NodeProps<CurrencyNodeType>) {
                   gap: 6,
                 }}
               >
-                <span style={{ fontSize: 16 }}>{FLAG[code] ?? "🏳️"}</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: "var(--ms-text-muted)", minWidth: 30 }}>{code}</span>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, color: ACCENT,
+                  background: "color-mix(in srgb, #10b981 14%, transparent)",
+                  border: "1px solid color-mix(in srgb, #10b981 30%, transparent)",
+                  borderRadius: 5, padding: "2px 6px", minWidth: 38, textAlign: "center",
+                }}>{code}</span>
                 <span style={{ flex: 1, fontSize: 14, fontWeight: 700, color: "var(--ms-text)", textAlign: "right" }}>
                   {converted}
                 </span>
@@ -248,7 +250,7 @@ export function CurrencyNode({ data, selected }: NodeProps<CurrencyNodeType>) {
             >
               <option value="">Select currency…</option>
               {ALL_CURRENCIES.filter((c) => c !== d.base && !d.targets.includes(c)).map((c) => (
-                <option key={c} value={c}>{FLAG[c] ?? ""} {c}</option>
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
             <button

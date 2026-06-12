@@ -7,6 +7,7 @@ import { CheckSquare, Maximize2, Minimize2, Trash2 } from "lucide-react";
 import { useStore } from "../../store";
 import { MindNode, TaskData, TaskItem } from "../../types";
 import { sounds } from "../../lib/sound";
+import { useModelSuggestions, ModelSuggestionChips } from "../canvas/ModelSuggestionChips";
 
 export type TaskNodeType = Node<{ mindNode: MindNode }, "task">;
 
@@ -33,6 +34,12 @@ export function TaskNode({ data, selected }: NodeProps<TaskNodeType>) {
   const titleRef = useRef<HTMLInputElement>(null);
   const updateNodeInternals = useUpdateNodeInternals();
   const cmdDown = useCmdKey();
+
+  const sugg = useModelSuggestions(
+    mindNode.id,
+    `${titleValue} ${taskData.items.map((i) => i.text).join(" ")}`,
+    !!selected
+  );
 
   const saveTitle = useCallback(() => {
     setEditingTitle(false);
@@ -314,6 +321,8 @@ export function TaskNode({ data, selected }: NodeProps<TaskNodeType>) {
       <Handle type="source" position={Position.Bottom} />
       <Handle type="target" position={Position.Left} />
       <Handle type="source" position={Position.Right} />
+
+      <ModelSuggestionChips sourceNode={mindNode} models={sugg.models} onDismiss={sugg.dismiss} onClear={sugg.clear} />
     </motion.div>
   );
 }

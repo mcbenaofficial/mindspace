@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Folder, BrainCircuit, Rocket, Lightbulb, FileText, Target,
   Zap, Leaf, Globe, Wrench, Plus, Settings, Layers, ChevronRight,
-  Download, Upload,
+  Download, Upload, Sunrise, Share2, Search as SearchIcon,
 } from "lucide-react";
 import { useStore } from "../../store";
 import { sounds } from "../../lib/sound";
@@ -81,6 +81,7 @@ export function Sidebar() {
     loadCanvases, setActiveCanvas, createProject, createCanvas,
     updateProject, updateCanvas,
     setSettingsOpen, createProjectPrompt, setCreateProjectPrompt,
+    setTodayOpen, todayOpen, setGraphOpen, inboxCount, setSearchOpen,
   } = useStore();
 
   const [newProjectName, setNewProjectName] = useState("");
@@ -525,6 +526,39 @@ export function Sidebar() {
         </div>
       )}
 
+      {/* ── Search ──────────────────────────────────────────────────────────── */}
+      <div style={{ padding: "0 12px 0", flexShrink: 0 }}>
+        <button
+          onClick={() => { sounds.click(); setSearchOpen(true); }}
+          title="Search everything (⌘K)"
+          style={{
+            width: "100%",
+            display: "flex", alignItems: "center", gap: 8,
+            background: "var(--ms-border)", border: "1px solid transparent",
+            borderRadius: 10, cursor: "pointer", padding: "8px 10px",
+            color: "var(--ms-text-muted)", fontSize: 12, transition: "all 0.15s",
+          }}
+          onMouseEnter={(e) => {
+            const el = e.currentTarget as HTMLElement;
+            el.style.color = "var(--ms-accent)";
+            el.style.borderColor = "var(--ms-accent-25)";
+          }}
+          onMouseLeave={(e) => {
+            const el = e.currentTarget as HTMLElement;
+            el.style.color = "var(--ms-text-muted)";
+            el.style.borderColor = "transparent";
+          }}
+        >
+          <SearchIcon size={13} />
+          <span style={{ flex: 1, textAlign: "left" }}>Search</span>
+          <span style={{
+            fontSize: 10, padding: "1px 6px", borderRadius: 5,
+            border: "1px solid var(--ms-border)", color: "var(--ms-text-muted)",
+            background: "var(--ms-bg)",
+          }}>⌘K</span>
+        </button>
+      </div>
+
       {/* ── Bottom bar ──────────────────────────────────────────────────────── */}
       <div style={{
         padding: "10px 12px",
@@ -532,7 +566,48 @@ export function Sidebar() {
         background: "linear-gradient(0deg, var(--ms-bg) 0%, transparent 100%)",
         flexShrink: 0,
         display: "flex", alignItems: "center", gap: 8,
+        marginTop: 10,
       }}>
+        <button
+          onClick={() => { sounds.click(); setTodayOpen(!todayOpen); }}
+          title="Today — digest & inbox"
+          style={{
+            position: "relative",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "var(--ms-border)", border: "1px solid transparent",
+            borderRadius: 10, cursor: "pointer", padding: "8px 10px",
+            color: "var(--ms-text-muted)", transition: "all 0.15s",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--ms-accent)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--ms-text-muted)"; }}
+        >
+          <Sunrise size={13} />
+          {inboxCount > 0 && (
+            <span style={{
+              position: "absolute", top: -5, right: -5,
+              background: "var(--ms-accent)", color: "var(--ms-bg)",
+              fontSize: 9, fontWeight: 700, borderRadius: 9,
+              minWidth: 15, height: 15, display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "0 3px",
+            }}>
+              {inboxCount > 99 ? "99+" : inboxCount}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => { sounds.click(); setGraphOpen(true); }}
+          title="Knowledge graph (⌘⇧G)"
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "var(--ms-border)", border: "1px solid transparent",
+            borderRadius: 10, cursor: "pointer", padding: "8px 10px",
+            color: "var(--ms-text-muted)", transition: "all 0.15s",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--ms-accent)"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--ms-text-muted)"; }}
+        >
+          <Share2 size={13} />
+        </button>
         <button
           onClick={() => { sounds.click(); setSettingsOpen(true); }}
           onMouseEnter={() => setSettingsHovered(true)}

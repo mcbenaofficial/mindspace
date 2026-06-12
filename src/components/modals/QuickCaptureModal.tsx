@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, CheckSquare, Mic, LayoutGrid } from "lucide-react";
+import { FileText, CheckSquare, Mic, LayoutGrid, Inbox, LocateFixed } from "lucide-react";
 import { useStore } from "../../store";
 import { sounds } from "../../lib/sound";
+import { triageInbox } from "../../lib/brain/triage";
 import { NodeType, NoteData, TaskData, VoiceData } from "../../types";
 
 type CaptureType = Extract<NodeType, "note" | "task" | "voice">;
@@ -13,10 +14,24 @@ const CAPTURE_TYPES: { type: CaptureType; icon: React.ReactNode; label: string }
   { type: "voice", icon: <Mic size={13} />, label: "Voice" },
 ];
 
+function textToTipTap(text: string): string {
+  return JSON.stringify({
+    type: "doc",
+    content: text.split(/\n+/).filter(Boolean).map((line) => ({
+      type: "paragraph",
+      content: [{ type: "text", text: line }],
+    })),
+  });
+}
+
 function defaultDataForType(text: string, type: CaptureType): NoteData | TaskData | VoiceData {
   switch (type) {
     case "note":
-      return { title: text.slice(0, 60) || "Quick Note", content: "" } as NoteData;
+      // First line becomes the title; the full dump goes into the note body.
+      return {
+        title: text.split("\n")[0].slice(0, 60) || "Quick Note",
+        content: text ? textToTipTap(text) : "",
+      } as NoteData;
     case "task":
       return {
         title: text.slice(0, 60) || "Quick Task",
@@ -45,8 +60,10 @@ export function QuickCaptureModal() {
     nodes,
   } = useStore();
 
+  const { ensureInbox, refreshInboxCount, settings } = useStore();
   const [text, setText] = useState("");
   const [captureType, setCaptureType] = useState<CaptureType>("note");
+  const [destination, setDestination] = useState<"inbox" | "current">("inbox");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-focus when opened
@@ -54,6 +71,7 @@ export function QuickCaptureModal() {
     if (quickCaptureOpen) {
       setText("");
       setCaptureType("note");
+      setDestination("inbox");
       setTimeout(() => textareaRef.current?.focus(), 60);
     }
   }, [quickCaptureOpen]);
@@ -62,14 +80,21 @@ export function QuickCaptureModal() {
     setQuickCaptureOpen(false);
   }, [setQuickCaptureOpen]);
 
+  const canCapture = destination === "inbox" || !!activeCanvasId;
+
   const handleCreate = useCallback(async () => {
-    if (!activeCanvasId) return;
+    let targetCanvasId = activeCanvasId;
+    if (destination === "inbox") {
+      const inbox = await ensureInbox();
+      targetCanvasId = inbox.canvasId;
+    }
+    if (!targetCanvasId) return;
     const x = Math.floor(100 + Math.random() * 700);
     const y = Math.floor(100 + Math.random() * 400);
     const maxZ = nodes.reduce((acc, n) => Math.max(acc, n.z_index), 0);
     const { width, height } = DEFAULT_NODE_SIZES[captureType];
-    await addNode({
-      canvas_id: activeCanvasId,
+    const node = await addNode({
+      canvas_id: targetCanvasId,
       type: captureType,
       x,
       y,
@@ -82,13 +107,20 @@ export function QuickCaptureModal() {
     });
     sounds.spawn();
     close();
-  }, [activeCanvasId, captureType, text, nodes, addNode, close]);
+    if (destination === "inbox") {
+      refreshInboxCount().catch(() => {});
+      if (settings.triage_enabled) {
+        // Give the embed/index hooks a moment, then auto-file this capture.
+        setTimeout(() => { triageInbox([node.id]).catch(() => {}); }, 1500);
+      }
+    }
+  }, [activeCanvasId, destination, captureType, text, nodes, addNode, close, ensureInbox, refreshInboxCount, settings.triage_enabled]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        if (activeCanvasId) {
+        if (canCapture) {
           handleCreate();
         }
       }
@@ -97,7 +129,7 @@ export function QuickCaptureModal() {
         close();
       }
     },
-    [handleCreate, close, activeCanvasId]
+    [handleCreate, close, canCapture]
   );
 
   return (
@@ -177,10 +209,35 @@ export function QuickCaptureModal() {
                   {label}
                 </button>
               ))}
+
+              {/* Destination: Inbox (auto-triaged) vs current canvas */}
+              <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+                {([
+                  { dest: "inbox" as const, icon: <Inbox size={12} />, label: "Inbox" },
+                  { dest: "current" as const, icon: <LocateFixed size={12} />, label: "Here" },
+                ]).map(({ dest, icon, label }) => (
+                  <button
+                    key={dest}
+                    onClick={() => setDestination(dest)}
+                    title={dest === "inbox" ? "Capture to Inbox — AI files it for you" : "Capture onto the current canvas"}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 5, padding: "4px 10px",
+                      borderRadius: 16, border: "1px solid",
+                      borderColor: destination === dest ? "var(--ms-accent)" : "var(--ms-border)",
+                      background: destination === dest ? "color-mix(in srgb, var(--ms-accent) 14%, transparent)" : "transparent",
+                      color: destination === dest ? "var(--ms-accent)" : "var(--ms-text-muted)",
+                      cursor: "pointer", fontSize: 11, fontWeight: destination === dest ? 700 : 400,
+                    }}
+                  >
+                    {icon}
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Textarea or no-canvas message */}
-            {!activeCanvasId ? (
+            {!canCapture ? (
               <div
                 style={{
                   padding: "28px 20px",
@@ -228,10 +285,10 @@ export function QuickCaptureModal() {
               }}
             >
               <span style={{ fontSize: 11, color: "var(--ms-text-muted)" }}>
-                {activeCanvasId ? (
+                {canCapture ? (
                   <>
                     <kbd style={{ background: "var(--ms-border)", borderRadius: 4, padding: "2px 5px", fontSize: 10 }}>Enter</kbd>
-                    {" "}to capture &nbsp;·&nbsp;{" "}
+                    {" "}to capture{destination === "inbox" ? " → Inbox (auto-filed)" : ""} &nbsp;·&nbsp;{" "}
                     <kbd style={{ background: "var(--ms-border)", borderRadius: 4, padding: "2px 5px", fontSize: 10 }}>Esc</kbd>
                     {" "}to close
                   </>
@@ -240,7 +297,7 @@ export function QuickCaptureModal() {
                 )}
               </span>
 
-              {activeCanvasId && (
+              {canCapture && (
                 <button
                   onClick={handleCreate}
                   disabled={!text.trim()}

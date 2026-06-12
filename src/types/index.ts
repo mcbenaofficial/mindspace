@@ -31,7 +31,8 @@ export type NodeType =
   | "github-issues"
   | "bookmark-cluster"
   | "rss-reader"
-  | "chart";
+  | "chart"
+  | "mental-model";
 
 export interface Project {
   id: string;
@@ -86,12 +87,20 @@ export interface AiChatAttachment {
   thumbnail?: string; // compressed data URL for image preview
 }
 
+export interface BrainCitation {
+  nodeId: string;
+  canvasId: string;
+  projectId: string;
+  title: string;
+}
+
 export interface AiChatMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: string;
   attachments?: AiChatAttachment[];
+  citations?: BrainCitation[];
 }
 
 export interface AiChatConversation {
@@ -107,6 +116,8 @@ export interface AiChatData {
   active_conversation_id: string | null;
   model: string;
   system_prompt: string;
+  /** When true, replies retrieve context from the whole vault (RAG). */
+  brain_enabled?: boolean;
   /** @deprecated legacy field, migrated on first load */
   messages?: AiChatMessage[];
 }
@@ -323,6 +334,12 @@ export interface ChartData {
   dataset: ChartDataPoint[];
 }
 
+export interface MentalModelData {
+  model_id: string | null;                   // null until the spawn picker resolves
+  prompt_responses: Record<string, string>;  // keyed by prompt index ("0", "1", …)
+  summary: string;                           // TipTap JSON string
+}
+
 export type NodeData =
   | NoteData
   | TaskData
@@ -356,7 +373,8 @@ export type NodeData =
   | GitHubIssuesData
   | BookmarkClusterData
   | RSSReaderData
-  | ChartData;
+  | ChartData
+  | MentalModelData;
 
 export interface VideoData {
   src: string;        // blob URL (session) or direct video URL
@@ -417,8 +435,23 @@ export interface AppSettings {
   custom_accent: string;
   snap_to_grid: boolean;
   grid_size: number;
+  grid_opacity: number; // 0..1 — 0 hides the dot grid entirely
+  grid_color: "subtle" | "text" | "accent"; // theme-derived grid color preset
   sound_enabled: boolean;
   sound_volume: number;
   edge_particles: boolean;
   node_color: string;
+  node_opacity: number; // 0.4..1 — node card visibility
+  canvas_fx_enabled: boolean;
+  canvas_fx_style: "hover" | "proximity" | "ripple";
+  canvas_fx_intensity: number; // 0..100
+  canvas_fx_cards: boolean; // node cards react to the cursor
+  canvas_fx_ambient: boolean; // ambient dot/particle layer reacts
+  // Brain (Phase 2)
+  lmstudio_embedding_model: string; // blank = auto-detect from /v1/models
+  triage_enabled: boolean;
+  triage_threshold: number; // 0..1 — below this, items stay in the Inbox
+  digest_enabled: boolean;
+  inbox_project_id: string;
+  inbox_canvas_id: string;
 }

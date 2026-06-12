@@ -11,9 +11,9 @@ import Placeholder from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import {
-  FileText, CheckSquare, CalendarDays, Clock, Bot, Mic, Link2, Globe,
-  Send, Volume2, StopCircle, X, Undo2, Redo2, ExternalLink, BookOpen, PlayCircle,
-  Plus, MessageSquare, Trash2 as TrashIcon,
+  FileText, Mic,
+  Send, Volume2, StopCircle, X, Undo2, Redo2, ExternalLink,
+  Plus, MessageSquare, Trash2 as TrashIcon, Brain, Sparkles, Quote,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -30,9 +30,14 @@ import {
   addMonths,
   subMonths,
 } from "date-fns";
-import { invoke } from "@tauri-apps/api/core";
-import { isTauri } from "../../lib/tauri-compat";
+import { streamChatCompletion, StreamHandle } from "../../lib/aiStream";
+import { retrievePassages, BrainPassage } from "../../lib/brain/retrieve";
+import { jumpToNode } from "../../lib/brain/navigation";
+import { nearestNodes } from "../../lib/brain/embeddings";
+import { entityRelatedNodes } from "../../lib/brain/entities";
+import { getDb, generateId } from "../../lib/db";
 import { useStore } from "../../store";
+import { NODE_REGISTRY } from "../nodes/registry";
 import { sounds } from "../../lib/sound";
 import {
   NoteData,
@@ -275,7 +280,7 @@ function NoteEditor({ node }: { node: MindNode }) {
           <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleCode().run(); }}
             style={toolbarBtn(editor.isActive("code"))} title="Inline Code (⌘E)">&lt;/&gt;</button>
           <button onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().toggleBlockquote().run(); }}
-            style={toolbarBtn(editor.isActive("blockquote"))} title="Blockquote (⌘⇧B)">❝</button>
+            style={toolbarBtn(editor.isActive("blockquote"))} title="Blockquote (⌘⇧B)"><Quote size={12} /></button>
 
           <div style={toolbarSeparator} />
 
@@ -766,6 +771,10 @@ function ClockEditor({ node }: { node: MindNode }) {
 
 // ─── AI Chat editor ───────────────────────────────────────────────────────────
 
+function stripRefsModal(s: string): string {
+  return s.replace(/\s*\[ref:[\w-]+\]/g, "");
+}
+
 function normalizeChatDataModal(raw: any): AiChatData {
   if (Array.isArray(raw?.conversations)) return raw as AiChatData;
   const msgs: AiChatMessage[] = raw?.messages || [];
@@ -790,13 +799,15 @@ function relativeTimeModal(iso: string): string {
 }
 
 function AiChatEditor({ node }: { node: MindNode }) {
-  const { updateNode, settings } = useStore();
+  const { updateNode, settings, setEditingNodeId } = useStore();
   const chatData = normalizeChatDataModal(node.data);
   const [inputValue, setInputValue] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [streamText, setStreamText] = useState<string | null>(null);
   const [systemOpen, setSystemOpen] = useState(false);
   const [hoveredConvId, setHoveredConvId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const streamRef = useRef<StreamHandle | null>(null);
 
   const activeConv: AiChatConversation | null =
     chatData.conversations.find(c => c.id === chatData.active_conversation_id) ?? null;
@@ -806,7 +817,7 @@ function AiChatEditor({ node }: { node: MindNode }) {
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeConv?.messages.length, isTyping]);
+  }, [activeConv?.messages.length, isTyping, streamText]);
 
   // Persist migration once
   useEffect(() => {
@@ -860,25 +871,49 @@ function AiChatEditor({ node }: { node: MindNode }) {
     try {
       type ApiMsg = { role: "user" | "assistant" | "system"; content: string };
       const apiMessages: ApiMsg[] = updatedConv.messages.map(m => ({ role: m.role, content: m.content }));
-      if (chatData.system_prompt) apiMessages.unshift({ role: "system", content: chatData.system_prompt });
-      const url = (settings.lmstudio_url || "http://127.0.0.1:1234") + "/v1/chat/completions";
-      const payload = JSON.stringify({ model: settings.lmstudio_model || chatData.model || "local-model", messages: apiMessages, temperature: 0.7, max_tokens: settings.lmstudio_max_tokens || 1024 });
-      let json: any;
-      if (isTauri()) {
-        const res = await invoke<{ status: number; body: string }>("http_post", { url, body: payload, apiKey: null });
-        if (res.status < 200 || res.status >= 300) throw new Error(`API error ${res.status}`);
-        json = JSON.parse(res.body);
-      } else {
-        const resp = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: payload });
-        if (!resp.ok) throw new Error(`API error: ${resp.status}`);
-        json = await resp.json();
+
+      let passages: BrainPassage[] = [];
+      if (chatData.brain_enabled) {
+        try { passages = await retrievePassages(text, 8); } catch { /* offline */ }
       }
-      const assistantMsg: AiChatMessage = { id: uid(), role: "assistant", content: json.choices?.[0]?.message?.content ?? "(no response)", timestamp: new Date().toISOString() };
+      let systemContent = "";
+      if (passages.length > 0) {
+        const ctx = passages
+          .map(p => `[ref:${p.nodeId}] ${p.projectName} / ${p.canvasName} — ${p.title}: ${p.text.slice(0, 600)}`)
+          .join("\n\n");
+        systemContent += `You have access to the user's personal knowledge vault. Relevant passages below. When you use one, cite it inline with its [ref:...] marker exactly as given.\n\n${ctx}\n\n`;
+      }
+      if (chatData.system_prompt) systemContent += chatData.system_prompt;
+      if (systemContent) apiMessages.unshift({ role: "system", content: systemContent });
+
+      const url = (settings.lmstudio_url || "http://127.0.0.1:1234") + "/v1/chat/completions";
+      setStreamText("");
+      const handle = streamChatCompletion({
+        url,
+        body: { model: settings.lmstudio_model || chatData.model || "local-model", messages: apiMessages, temperature: 0.7, max_tokens: settings.lmstudio_max_tokens || 1024 },
+        onDelta: setStreamText,
+      });
+      streamRef.current = handle;
+      const full = await handle.promise;
+
+      const refIds = [...new Set([...full.matchAll(/\[ref:([\w-]+)\]/g)].map(m => m[1]))];
+      const citations = refIds
+        .map(id => passages.find(p => p.nodeId === id))
+        .filter(Boolean)
+        .map(p => ({ nodeId: p!.nodeId, canvasId: p!.canvasId, projectId: p!.projectId, title: p!.title }));
+
+      const assistantMsg: AiChatMessage = {
+        id: uid(), role: "assistant", content: full || "(no response)",
+        timestamp: new Date().toISOString(),
+        citations: citations.length > 0 ? citations : undefined,
+      };
       await updateNode(node.id, { data: patchData([...updatedConv.messages, assistantMsg]) });
     } catch (err) {
       const errMsg: AiChatMessage = { id: uid(), role: "assistant", content: `Error: ${(err as Error).message}`, timestamp: new Date().toISOString() };
       await updateNode(node.id, { data: patchData([...updatedConv.messages, errMsg]) });
     } finally {
+      streamRef.current = null;
+      setStreamText(null);
       setIsTyping(false);
     }
   }, [inputValue, isTyping, activeConv, chatData, node.id, updateNode, settings]);
@@ -992,15 +1027,48 @@ function AiChatEditor({ node }: { node: MindNode }) {
                       }}>
                         {isUser ? msg.content : (
                           <div className="ms-chat-md">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{stripRefsModal(msg.content)}</ReactMarkdown>
+                          </div>
+                        )}
+                        {!isUser && msg.citations && msg.citations.length > 0 && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 8 }}>
+                            {msg.citations.map((c) => (
+                              <button key={c.nodeId}
+                                onClick={() => { setEditingNodeId(null); jumpToNode(c.nodeId, c.canvasId, c.projectId); }}
+                                title={`Jump to "${c.title}"`}
+                                style={{
+                                  display: "flex", alignItems: "center", gap: 4,
+                                  background: "var(--ms-accent-15)", border: "1px solid var(--ms-accent-25)",
+                                  borderRadius: 10, padding: "2px 8px", fontSize: 10.5,
+                                  color: "var(--ms-accent)", cursor: "pointer", maxWidth: 200,
+                                }}>
+                                <Brain size={10} style={{ flexShrink: 0 }} />
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</span>
+                              </button>
+                            ))}
                           </div>
                         )}
                       </div>
                     </div>
                   );
                 })}
+                {/* Live streaming bubble */}
+                {streamText !== null && streamText.length > 0 && (
+                  <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                    <div style={{
+                      maxWidth: "75%", padding: "10px 14px",
+                      borderRadius: "14px 14px 14px 4px",
+                      background: "var(--ms-border)", color: "var(--ms-text)",
+                      fontSize: 14, lineHeight: 1.55, wordBreak: "break-word", userSelect: "text",
+                    }}>
+                      <div className="ms-chat-md">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{stripRefsModal(streamText)}</ReactMarkdown>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <AnimatePresence>
-                  {isTyping && (
+                  {isTyping && !streamText && (
                     <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} style={{ display: "flex", justifyContent: "flex-start" }}>
                       <div style={{ background: "var(--ms-border)", borderRadius: "14px 14px 14px 4px", padding: "10px 16px", display: "flex", gap: 5, alignItems: "center" }}>
                         {[0, 1, 2].map(i => (
@@ -1024,6 +1092,23 @@ function AiChatEditor({ node }: { node: MindNode }) {
                   disabled={isTyping}
                   style={{ ...inputStyle, flex: 1 }}
                 />
+                <button
+                  onClick={() => updateNode(node.id, { data: { ...chatData, brain_enabled: !chatData.brain_enabled } })}
+                  title={chatData.brain_enabled ? "Brain ON — replies use your whole vault" : "Brain OFF — click to use your whole vault"}
+                  style={{
+                    ...btnStyle, padding: "7px 10px", display: "flex", alignItems: "center",
+                    background: chatData.brain_enabled ? "var(--ms-accent-15)" : "var(--ms-border)",
+                    border: chatData.brain_enabled ? "1px solid var(--ms-accent-25)" : "1px solid transparent",
+                    color: chatData.brain_enabled ? "var(--ms-accent)" : "var(--ms-text-muted)",
+                  }}>
+                  <Brain size={15} />
+                </button>
+                {isTyping && (
+                  <button onClick={() => streamRef.current?.stop()} title="Stop generating"
+                    style={{ ...btnStyle, background: "var(--ms-border)", color: "var(--ms-accent)", border: "1px solid var(--ms-accent-25)", padding: "7px 12px", display: "flex", alignItems: "center" }}>
+                    <StopCircle size={15} />
+                  </button>
+                )}
                 <button onClick={handleSend} disabled={isTyping || !inputValue.trim()}
                   style={{ ...btnStyle, background: "var(--ms-accent)", color: "var(--ms-bg)", border: "none", padding: "7px 14px", fontWeight: 700, display: "flex", alignItems: "center", opacity: isTyping || !inputValue.trim() ? 0.5 : 1, cursor: isTyping || !inputValue.trim() ? "not-allowed" : "pointer" }}>
                   <Send size={14} />
@@ -1292,20 +1377,117 @@ function WebLinkEditor({ node }: { node: MindNode }) {
   );
 }
 
-// ─── NODE TYPE CONFIG ────────────────────────────────────────────────────────
+// ─── RELATED STRIP (knowledge graph) ────────────────────────────────────────
 
-const NODE_META: Record<string, { icon: React.ReactNode; label: string }> = {
-  note: { icon: <FileText size={14} />, label: "Note" },
-  task: { icon: <CheckSquare size={14} />, label: "Task" },
-  calendar: { icon: <CalendarDays size={14} />, label: "Calendar" },
-  clock: { icon: <Clock size={14} />, label: "Clock" },
-  "ai-chat": { icon: <Bot size={14} />, label: "AI Chat" },
-  voice: { icon: <Mic size={14} />, label: "Voice" },
-  "project-hub": { icon: <Link2 size={14} />, label: "Project Hub" },
-  "web-link": { icon: <Globe size={14} />, label: "Web Link" },
-  file:       { icon: <BookOpen size={14} />,   label: "Document" },
-  video:      { icon: <PlayCircle size={14} />, label: "Video" },
-};
+interface RelatedItem {
+  nodeId: string;
+  title: string;
+  canvasId: string;
+  projectId: string;
+  kind: "linked" | "entity" | "semantic";
+}
+
+function RelatedStrip({ node }: { node: MindNode }) {
+  const { setEditingNodeId, edges } = useStore();
+  const [items, setItems] = useState<RelatedItem[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const db = await getDb();
+        const collected = new Map<string, RelatedItem>();
+
+        const addMeta = async (ids: string[], kind: RelatedItem["kind"]) => {
+          if (ids.length === 0) return;
+          const placeholders = ids.map(() => "?").join(",");
+          const rows = await db.select<any[]>(
+            `SELECT n.id, n.canvas_id, c.project_id, COALESCE(s.title, '') AS title
+             FROM nodes n JOIN canvases c ON c.id = n.canvas_id
+             LEFT JOIN search_index s ON s.node_id = n.id
+             WHERE n.id IN (${placeholders})`,
+            ids
+          ).catch(() => [] as any[]);
+          for (const r of rows) {
+            if (r.id === node.id || collected.has(r.id)) continue;
+            collected.set(r.id, { nodeId: r.id, title: r.title || "(untitled)", canvasId: r.canvas_id, projectId: r.project_id, kind });
+          }
+        };
+
+        // 1. Explicit connections: canvas edges + cross-canvas links
+        const edgeIds = edges
+          .filter((e) => e.source === node.id || e.target === node.id)
+          .map((e) => (e.source === node.id ? e.target : e.source));
+        const linkRows = await db.select<{ a_node: string; b_node: string }[]>(
+          `SELECT a_node, b_node FROM links WHERE a_node = ? OR b_node = ?`, [node.id, node.id]
+        );
+        const linkIds = linkRows.map((l) => (l.a_node === node.id ? l.b_node : l.a_node));
+        await addMeta([...edgeIds, ...linkIds], "linked");
+
+        // 2. Entity overlap + 3. semantic similarity (suggestions)
+        const ent = await entityRelatedNodes(node.id, 4).catch(() => []);
+        await addMeta(ent.map((e) => e.nodeId), "entity");
+        const near = await nearestNodes(node.id, 4).catch(() => []);
+        await addMeta(near.filter((n) => n.score > 0.6).map((n) => n.nodeId), "semantic");
+
+        if (!cancelled) setItems([...collected.values()].slice(0, 8));
+      } catch { /* brain tables not ready */ }
+    })();
+    return () => { cancelled = true; };
+  }, [node.id, edges]);
+
+  const acceptLink = async (other: RelatedItem) => {
+    const db = await getDb();
+    await db.execute(
+      `INSERT INTO links (id, a_node, b_node, kind, created_at) VALUES (?, ?, ?, 'related', ?)`,
+      [generateId(), node.id, other.nodeId, new Date().toISOString()]
+    );
+    setItems((prev) => prev.map((i) => (i.nodeId === other.nodeId ? { ...i, kind: "linked" } : i)));
+    sounds.connect();
+  };
+
+  if (items.length === 0) return null;
+
+  return (
+    <div style={{
+      borderTop: "1px solid var(--ms-border)", padding: "8px 20px", flexShrink: 0,
+      display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap",
+    }}>
+      <span style={{ fontSize: 10, fontWeight: 700, color: "var(--ms-text-muted)", textTransform: "uppercase", letterSpacing: "0.08em", flexShrink: 0 }}>
+        Related
+      </span>
+      {items.map((item) => (
+        <span key={item.nodeId} style={{
+          display: "flex", alignItems: "center", gap: 4,
+          background: item.kind === "linked" ? "var(--ms-accent-15)" : "var(--ms-border)",
+          border: item.kind === "linked" ? "1px solid var(--ms-accent-25)" : "1px solid transparent",
+          borderRadius: 10, padding: "2px 4px 2px 8px", fontSize: 10.5, maxWidth: 180,
+        }}>
+          {item.kind !== "linked" && <Sparkles size={9} color="var(--ms-text-muted)" style={{ flexShrink: 0 }} />}
+          <button
+            onClick={() => { setEditingNodeId(null); jumpToNode(item.nodeId, item.canvasId, item.projectId); }}
+            title={`Jump to "${item.title}"`}
+            style={{
+              background: "none", border: "none", cursor: "pointer", padding: 0,
+              color: item.kind === "linked" ? "var(--ms-accent)" : "var(--ms-text)",
+              fontSize: 10.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 130,
+            }}>
+            {item.title}
+          </button>
+          {item.kind !== "linked" && (
+            <button onClick={() => acceptLink(item)} title="Link these nodes"
+              style={{ background: "none", border: "none", cursor: "pointer", padding: "0 3px", color: "var(--ms-text-muted)", display: "flex", alignItems: "center" }}>
+              <Plus size={10} />
+            </button>
+          )}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ─── NODE TYPE CONFIG ────────────────────────────────────────────────────────
+// Icon + label come from the node registry (one source of truth for all types).
 
 // ─── MAIN MODAL ─────────────────────────────────────────────────────────────
 
@@ -1326,7 +1508,10 @@ export function NodeEditorModal() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [close]);
 
-  const meta = node ? NODE_META[node.type] ?? { icon: "📄", label: node.type } : null;
+  const def = node ? NODE_REGISTRY[node.type] : null;
+  const meta = node
+    ? { icon: def ? <def.icon size={14} /> : <FileText size={14} />, label: def?.label ?? node.type }
+    : null;
 
   return (
     <AnimatePresence>
@@ -1414,6 +1599,9 @@ export function NodeEditorModal() {
               {node.type === "project-hub" && <ProjectHubEditor key={node.id} node={node} />}
               {node.type === "web-link" && <WebLinkEditor key={node.id} node={node} />}
             </div>
+
+            {/* Knowledge-graph related strip */}
+            <RelatedStrip key={`rel-${node.id}`} node={node} />
           </motion.div>
         </motion.div>
       )}

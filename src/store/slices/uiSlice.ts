@@ -9,7 +9,11 @@ export interface UiSlice {
   sidebarOpen: boolean;
   searchOpen: boolean;
   pendingFocusNodeId: string | null;
+  todayOpen: boolean;
+  graphOpen: boolean;
 
+  setTodayOpen: (v: boolean) => void;
+  setGraphOpen: (v: boolean) => void;
   setSettingsOpen: (v: boolean) => void;
   setQuickCaptureOpen: (v: boolean) => void;
   setEditingNodeId: (id: string | null) => void;
@@ -27,7 +31,11 @@ export const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => (
   sidebarOpen: true,
   searchOpen: false,
   pendingFocusNodeId: null,
+  todayOpen: false,
+  graphOpen: false,
 
+  setTodayOpen: (v) => set({ todayOpen: v }),
+  setGraphOpen: (v) => set({ graphOpen: v }),
   setSettingsOpen: (v) => set({ settingsOpen: v }),
   setQuickCaptureOpen: (v) => set({ quickCaptureOpen: v }),
   setEditingNodeId: (id) => set({ editingNodeId: id }),

@@ -266,7 +266,52 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_notification::init())
-        .setup(|_app| Ok(()))
+        .setup(|app| {
+            #[cfg(desktop)]
+            {
+                use tauri::{
+                    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+                    Manager,
+                };
+                TrayIconBuilder::with_id("mindspace-tray")
+                    .icon(app.default_window_icon().expect("app icon").clone())
+                    .icon_as_template(true)
+                    .tooltip("MindSpace capture")
+                    .on_tray_icon_event(|tray, event| {
+                        let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            position,
+                            ..
+                        } = event
+                        else {
+                            return;
+                        };
+                        let app = tray.app_handle();
+                        let Some(win) = app.get_webview_window("capture") else {
+                            return;
+                        };
+                        if win.is_visible().unwrap_or(false) {
+                            let _ = win.hide();
+                            return;
+                        }
+                        // Center the popover under the tray icon click.
+                        let width = win
+                            .outer_size()
+                            .map(|s| s.width as i32)
+                            .unwrap_or(520);
+                        let x = (position.x as i32 - width / 2).max(0);
+                        let y = position.y as i32 + 8;
+                        let _ = win.set_position(tauri::Position::Physical(
+                            tauri::PhysicalPosition::new(x, y),
+                        ));
+                        let _ = win.show();
+                        let _ = win.set_focus();
+                    })
+                    .build(app)?;
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![get_app_version, http_post, http_post_stream, cancel_stream, http_get, transcribe_audio, synthesize_speech, prepare_backup_path])
         .run(tauri::generate_context!())
         .expect("error while running MindSpace");

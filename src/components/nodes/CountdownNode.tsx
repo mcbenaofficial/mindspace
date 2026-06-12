@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Handle, Position, NodeProps, Node, NodeResizer } from "@xyflow/react";
 import { useCmdKey } from "../../hooks/useCmdKey";
 import { motion } from "framer-motion";
-import { AlarmClock, Trash2 } from "lucide-react";
+import { AlarmClock, Trash2, PartyPopper } from "lucide-react";
 import { useStore } from "../../store";
 import { MindNode, CountdownData } from "../../types";
 
@@ -181,8 +181,8 @@ export function CountdownNode({ data, selected }: NodeProps<CountdownNodeType>) 
       >
         {/* Countdown display */}
         {expired ? (
-          <div style={{ fontSize: 26, fontWeight: 800, textAlign: "center" }}>
-            Time's Up! 🎉
+          <div style={{ fontSize: 26, fontWeight: 800, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+            Time's Up! <PartyPopper size={24} color="var(--ms-accent)" />
           </div>
         ) : (
           <div

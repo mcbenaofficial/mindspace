@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import {
   PlayCircle, Maximize2, Minimize2, Trash2,
   Play, Pause, Volume2, VolumeX, Repeat, Maximize, Upload, Link2,
-  AlertCircle,
+  AlertCircle, X,
 } from "lucide-react";
 import { useCmdKey } from "../../hooks/useCmdKey";
 import { useStore } from "../../store";
@@ -277,7 +277,7 @@ export function VideoNode({ data, selected }: NodeProps<VideoNodeType>) {
                   style={{ flex: 1, background: "var(--ms-bg)", border: "none", borderRadius: 7, color: "var(--ms-text)", fontSize: 11, padding: "6px 9px", outline: "none" }}
                 />
                 <button onClick={handleUrlSubmit} style={{ padding: "6px 10px", background: "#3b82f6", border: "none", borderRadius: 7, color: "#fff", cursor: "pointer", fontSize: 11, fontWeight: 600 }}>Go</button>
-                <button onClick={() => setShowUrlInput(false)} style={{ padding: "6px 8px", background: "var(--ms-border)", border: "none", borderRadius: 7, color: "var(--ms-text-muted)", cursor: "pointer", fontSize: 11 }}>✕</button>
+                <button onClick={() => setShowUrlInput(false)} style={{ padding: "6px 8px", background: "var(--ms-border)", border: "none", borderRadius: 7, color: "var(--ms-text-muted)", cursor: "pointer", display: "flex", alignItems: "center" }}><X size={11} /></button>
               </div>
             ) : (
               <button

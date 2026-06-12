@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { FileText, Maximize2, Minimize2, Trash2, Download } from "lucide-react";
 import { useStore } from "../../store";
 import { MindNode, NoteData } from "../../types";
+import { useModelSuggestions, ModelSuggestionChips } from "../canvas/ModelSuggestionChips";
 
 function tiptapToMarkdown(jsonStr: string, title: string): string {
   let md = `# ${title}\n\n`;
@@ -155,6 +156,8 @@ export function NoteNode({ data, selected }: NodeProps<NoteNodeType>) {
     }
   }, [mindNode.created_at]);
 
+  const sugg = useModelSuggestions(mindNode.id, `${titleValue} ${contentPreview}`, !!selected);
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9 }}
@@ -300,6 +303,8 @@ export function NoteNode({ data, selected }: NodeProps<NoteNodeType>) {
       <Handle type="source" position={Position.Bottom} />
       <Handle type="target" position={Position.Left} />
       <Handle type="source" position={Position.Right} />
+
+      <ModelSuggestionChips sourceNode={mindNode} models={sugg.models} onDismiss={sugg.dismiss} onClear={sugg.clear} />
     </motion.div>
   );
 }

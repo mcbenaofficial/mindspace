@@ -4,6 +4,7 @@ import { useStore } from "../../store";
 import { sounds } from "../../lib/sound";
 import { THEMES } from "../../lib/themes";
 import { AppSettings, ThemeId } from "../../types";
+import { AutomationsSection } from "./AutomationsSection";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -131,15 +132,32 @@ const btnSmall: React.CSSProperties = {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function SettingsPanel() {
-  const { settings, saveSettings, setSettingsOpen } = useStore();
+  const { settings, saveSettings, setSettingsOpen, brainStatus, brainChunkCount } = useStore();
 
   const [openSections, setOpenSections] = useState({
     appearance: true,
     connections: true,
+    brain: true,
+    automations: false,
     canvas: true,
     shortcuts: true,
     releaseNotes: false,
   });
+
+  const [rebuilding, setRebuilding] = useState(false);
+  const handleRebuildBrain = useCallback(async () => {
+    setRebuilding(true);
+    try {
+      const { rebuildBrainIndex } = await import("../../lib/brain/embeddings");
+      await rebuildBrainIndex();
+      sounds.complete();
+    } catch (err) {
+      console.warn("Rebuild failed:", err);
+      sounds.error();
+    } finally {
+      setRebuilding(false);
+    }
+  }, []);
 
   const toggleSection = (key: keyof typeof openSections) =>
     setOpenSections((s) => ({ ...s, [key]: !s[key] }));
@@ -433,7 +451,7 @@ export function SettingsPanel() {
                       gap: 5,
                     }}
                   >
-                    {lmTestStatus === "ok" ? "✓ Connected" : "✗ Failed — check URL and ensure LMStudio is running"}
+                    {lmTestStatus === "ok" ? "Connected" : "Failed — check URL and ensure LMStudio is running"}
                   </div>
                 )}
               </div>
@@ -494,7 +512,7 @@ export function SettingsPanel() {
                 </div>
                 {orTestStatus !== "idle" && (
                   <div style={{ marginTop: 5, fontSize: 11, color: orTestStatus === "ok" ? "#4ade80" : "#f87171", display: "flex", alignItems: "center", gap: 5 }}>
-                    {orTestStatus === "ok" ? "✓ Connected — API key valid" : "✗ Failed — check your API key"}
+                    {orTestStatus === "ok" ? "Connected — API key valid" : "Failed — check your API key"}
                   </div>
                 )}
                 <a
@@ -513,6 +531,111 @@ export function SettingsPanel() {
         <div style={{ borderTop: "1px solid var(--ms-border)" }} />
 
         {/* ── CANVAS ───────────────────────────────────────────────────── */}
+        {/* ── BRAIN ──────────────────────────────────────────────────────── */}
+        <SectionHeader title="Brain" open={openSections.brain} onToggle={() => toggleSection("brain")} />
+        <AnimatePresence initial={false}>
+          {openSections.brain && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              style={{ overflow: "hidden" }}
+            >
+              <div style={{ padding: "4px 2px 14px" }}>
+                {/* Status */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <span style={{
+                    width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+                    background: brainStatus === "ready" ? "#4ade80"
+                      : brainStatus === "indexing" ? "var(--ms-accent)"
+                      : brainStatus === "offline" ? "#f87171" : "var(--ms-border)",
+                  }} />
+                  <span style={{ fontSize: 12, color: "var(--ms-text)", flex: 1 }}>
+                    {brainStatus === "ready" && `Semantic memory ready · ${brainChunkCount} chunks indexed`}
+                    {brainStatus === "indexing" && "Indexing your vault…"}
+                    {brainStatus === "offline" && "LM Studio offline — keyword search only"}
+                    {brainStatus === "idle" && "Waiting for first index"}
+                  </span>
+                  <button
+                    onClick={handleRebuildBrain}
+                    disabled={rebuilding}
+                    style={{
+                      padding: "4px 12px", background: "var(--ms-border)", border: "none",
+                      borderRadius: 7, color: "var(--ms-text)", fontSize: 11,
+                      cursor: rebuilding ? "wait" : "pointer",
+                    }}>
+                    {rebuilding ? "Rebuilding…" : "Rebuild index"}
+                  </button>
+                </div>
+
+                {/* Embedding model */}
+                <label style={{ fontSize: 11, color: "var(--ms-text-muted)", display: "block", marginBottom: 4 }}>
+                  Embedding model (blank = auto-detect from LM Studio)
+                </label>
+                <input
+                  defaultValue={settings.lmstudio_embedding_model}
+                  onChange={(e) => debouncedSave("lmstudio_embedding_model", e.target.value.trim())}
+                  placeholder="e.g. text-embedding-nomic-embed-text-v1.5"
+                  style={{
+                    width: "100%", background: "var(--ms-bg)", border: "1px solid var(--ms-border)",
+                    borderRadius: 8, padding: "7px 10px", color: "var(--ms-text)", fontSize: 12,
+                    outline: "none", marginBottom: 14,
+                  }}
+                />
+
+                {/* Triage */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 12.5, color: "var(--ms-text)" }}>Auto-file Inbox captures</div>
+                    <div style={{ fontSize: 10.5, color: "var(--ms-text-muted)" }}>AI moves brain dumps to the right canvas; ⌘Z undoes</div>
+                  </div>
+                  <Toggle checked={settings.triage_enabled} onChange={(v) => immediateSave({ triage_enabled: v })} />
+                </div>
+                {settings.triage_enabled && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                    <span style={{ fontSize: 11, color: "var(--ms-text-muted)", flexShrink: 0 }}>Confidence to file</span>
+                    <input
+                      type="range" min={0.5} max={0.95} step={0.05}
+                      defaultValue={settings.triage_threshold}
+                      onChange={(e) => debouncedSave("triage_threshold", parseFloat(e.target.value))}
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ fontSize: 11, color: "var(--ms-text)", width: 30, textAlign: "right" }}>
+                      {Math.round((settings.triage_threshold || 0.7) * 100)}%
+                    </span>
+                  </div>
+                )}
+
+                {/* Digest */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div>
+                    <div style={{ fontSize: 12.5, color: "var(--ms-text)" }}>Daily digest</div>
+                    <div style={{ fontSize: 10.5, color: "var(--ms-text-muted)" }}>Morning recap with resurfaced notes and stale tasks</div>
+                  </div>
+                  <Toggle checked={settings.digest_enabled} onChange={(v) => immediateSave({ digest_enabled: v })} />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── AUTOMATIONS ────────────────────────────────────────────────── */}
+        <SectionHeader title="Automations" open={openSections.automations} onToggle={() => toggleSection("automations")} />
+        <AnimatePresence initial={false}>
+          {openSections.automations && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              style={{ overflow: "hidden" }}
+            >
+              <AutomationsSection />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <SectionHeader title="Canvas" open={openSections.canvas} onToggle={() => toggleSection("canvas")} />
         <AnimatePresence initial={false}>
           {openSections.canvas && (
@@ -540,9 +663,53 @@ export function SettingsPanel() {
                   step={2}
                   value={settings.grid_size}
                   onChange={(e) => debouncedSave("grid_size", parseInt(e.target.value), 80)}
-                  disabled={!settings.snap_to_grid}
-                  style={{ width: 110, accentColor: "var(--ms-accent)", opacity: settings.snap_to_grid ? 1 : 0.4 }}
+                  style={{ width: 110, accentColor: "var(--ms-accent)" }}
                 />
+              </div>
+
+              <div style={fieldStyle}>
+                <span style={labelStyle}>Grid Opacity ({Math.round((settings.grid_opacity ?? 1) * 100)}%)</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={Math.round((settings.grid_opacity ?? 1) * 100)}
+                  onChange={(e) => debouncedSave("grid_opacity", parseInt(e.target.value) / 100, 80)}
+                  style={{ width: 110, accentColor: "var(--ms-accent)" }}
+                />
+              </div>
+
+              <div style={fieldStyle}>
+                <span style={labelStyle}>Grid Color</span>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {([
+                    { id: "subtle" as const, label: "Subtle" },
+                    { id: "text" as const, label: "Text" },
+                    { id: "accent" as const, label: "Accent" },
+                  ]).map((opt) => (
+                    <button
+                      key={opt.id}
+                      onClick={() => immediateSave({ grid_color: opt.id })}
+                      style={{
+                        ...btnSmall,
+                        padding: "4px 9px",
+                        fontSize: 11,
+                        background: (settings.grid_color ?? "subtle") === opt.id
+                          ? "color-mix(in srgb, var(--ms-accent) 18%, var(--ms-border))"
+                          : "var(--ms-border)",
+                        color: (settings.grid_color ?? "subtle") === opt.id
+                          ? "var(--ms-text)"
+                          : "var(--ms-text-muted)",
+                        border: (settings.grid_color ?? "subtle") === opt.id
+                          ? "1px solid var(--ms-accent)"
+                          : "1px solid transparent",
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div style={fieldStyle}>
@@ -580,6 +747,92 @@ export function SettingsPanel() {
                   onChange={(v) => immediateSave({ edge_particles: v })}
                 />
               </div>
+
+              <div style={fieldStyle}>
+                <span style={labelStyle}>Node Opacity ({Math.round((settings.node_opacity ?? 1) * 100)}%)</span>
+                <input
+                  type="range"
+                  min={40}
+                  max={100}
+                  step={5}
+                  value={Math.round((settings.node_opacity ?? 1) * 100)}
+                  onChange={(e) => debouncedSave("node_opacity", parseInt(e.target.value) / 100, 80)}
+                  style={{ width: 110, accentColor: "var(--ms-accent)" }}
+                />
+              </div>
+
+              <div style={fieldStyle}>
+                <span style={labelStyle}>Hover Effects</span>
+                <Toggle
+                  checked={settings.canvas_fx_enabled ?? true}
+                  onChange={(v) => immediateSave({ canvas_fx_enabled: v })}
+                />
+              </div>
+
+              {(settings.canvas_fx_enabled ?? true) && (
+                <>
+                  <div style={fieldStyle}>
+                    <span style={labelStyle}>Effect Style</span>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {([
+                        { id: "hover" as const, label: "Hover" },
+                        { id: "proximity" as const, label: "Proximity" },
+                        { id: "ripple" as const, label: "Ripple" },
+                      ]).map((opt) => (
+                        <button
+                          key={opt.id}
+                          onClick={() => immediateSave({ canvas_fx_style: opt.id })}
+                          style={{
+                            ...btnSmall,
+                            padding: "4px 9px",
+                            fontSize: 11,
+                            background: (settings.canvas_fx_style ?? "proximity") === opt.id
+                              ? "color-mix(in srgb, var(--ms-accent) 18%, var(--ms-border))"
+                              : "var(--ms-border)",
+                            color: (settings.canvas_fx_style ?? "proximity") === opt.id
+                              ? "var(--ms-text)"
+                              : "var(--ms-text-muted)",
+                            border: (settings.canvas_fx_style ?? "proximity") === opt.id
+                              ? "1px solid var(--ms-accent)"
+                              : "1px solid transparent",
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={fieldStyle}>
+                    <span style={labelStyle}>Effect Intensity ({settings.canvas_fx_intensity ?? 60}%)</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={settings.canvas_fx_intensity ?? 60}
+                      onChange={(e) => debouncedSave("canvas_fx_intensity", parseInt(e.target.value), 80)}
+                      style={{ width: 110, accentColor: "var(--ms-accent)" }}
+                    />
+                  </div>
+
+                  <div style={fieldStyle}>
+                    <span style={labelStyle}>Node Cards React</span>
+                    <Toggle
+                      checked={settings.canvas_fx_cards ?? true}
+                      onChange={(v) => immediateSave({ canvas_fx_cards: v })}
+                    />
+                  </div>
+
+                  <div style={fieldStyle}>
+                    <span style={labelStyle}>Ambient Layer Reacts</span>
+                    <Toggle
+                      checked={settings.canvas_fx_ambient ?? true}
+                      onChange={(v) => immediateSave({ canvas_fx_ambient: v })}
+                    />
+                  </div>
+                </>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -665,10 +918,136 @@ export function SettingsPanel() {
             >
               {[
                 {
-                  version: "1.3",
+                  version: "1.9",
                   label: "Current",
                   date: "June 2026",
                   current: true,
+                  changes: [
+                    "Grid Opacity slider in Settings > Canvas — fade the dot grid from fully visible down to hidden",
+                    "Grid Color presets that follow your theme: Subtle (default), Text, or Accent",
+                    "Grid Size can now be adjusted even when Snap to Grid is off",
+                  ],
+                },
+                {
+                  version: "1.8.2",
+                  label: "",
+                  date: "June 2026",
+                  current: false,
+                  changes: [
+                    "Ambient model suggestions: as you type in a Note, Task, AI Chat, or Mental Model node, up to two relevant mental-model chips appear below it",
+                    "Click a chip to spawn a ready-to-use Mental Model node wired to what you were writing; dismiss to mute that model for the node",
+                    "The model library is embedded once via LM Studio on first launch; suggestions stay silent when LM Studio is offline",
+                  ],
+                },
+                {
+                  version: "1.8.1",
+                  label: "",
+                  date: "June 2026",
+                  current: false,
+                  changes: [
+                    "Mental Model node: a new Think category in the spawn menu — pick a model and work through its guided prompts on the canvas",
+                    "Rich-text Summary field with a one-click \"Summarise with AI\" synthesis of your responses (local LM Studio)",
+                    "Wire a Mental Model node to an AI Chat node to activate that model as the chat's lens; remove the wire to clear it",
+                    "Swap the node's model anytime — with a confirmation before your responses are cleared",
+                  ],
+                },
+                {
+                  version: "1.8",
+                  label: "",
+                  date: "June 2026",
+                  current: false,
+                  changes: [
+                    "Mental Models library: 31 reasoning frameworks across Management & Leadership, Career, and Thinking & Perspective, stored locally",
+                    "AI Chat Lens: pick any mental model and the chat reasons through your questions using that framework",
+                    "Searchable lens picker grouped by category, with keyboard navigation",
+                    "Amber indicator on the chat node while a lens is active; clears with one click",
+                  ],
+                },
+                {
+                  version: "1.7",
+                  label: "",
+                  date: "June 2026",
+                  current: false,
+                  changes: [
+                    "The canvas feels alive: nodes, ambient dots, and the grid react as your cursor moves — choose Hover, Proximity, or Ripple style",
+                    "Hover Effects controls in Settings > Canvas: on/off, style, intensity, and per-layer toggles",
+                    "Node Color now tints the node cards (selection and glow), not just the background layer",
+                    "New Node Opacity slider to fade cards into the canvas",
+                  ],
+                },
+                {
+                  version: "1.6.2",
+                  label: "",
+                  date: "June 2026",
+                  current: false,
+                  changes: [
+                    "Fixed: global search no longer comes up empty — the index rebuilds reliably at startup",
+                    "Search button in the sidebar, above Settings",
+                    "Canvas grid follows your Grid Size setting and is clearly visible",
+                  ],
+                },
+                {
+                  version: "1.6.1",
+                  label: "",
+                  date: "June 2026",
+                  current: false,
+                  changes: [
+                    "Fixed: black screen at startup caused by a canvas render loop in the packaged app",
+                  ],
+                },
+                {
+                  version: "1.6",
+                  label: "",
+                  date: "June 2026",
+                  current: false,
+                  changes: [
+                    "Menubar capture: click the tray icon to dump a thought from anywhere — it lands in your Inbox and gets auto-filed, no main window needed",
+                    "Automations: build when-X-do-Y rules in Settings — task reminders, RSS keyword watches, daily schedules, auto-notes, and triage runs",
+                    "Node registry: every node type now registers in one place, so new widgets are one file plus one entry",
+                  ],
+                },
+                {
+                  version: "1.5.1",
+                  label: "",
+                  date: "June 2026",
+                  current: false,
+                  changes: [
+                    "Consistent iconography: all emojis replaced with crisp vector icons across weather, currency, habits, and badges",
+                  ],
+                },
+                {
+                  version: "1.5",
+                  label: "",
+                  date: "June 2026",
+                  current: false,
+                  changes: [
+                    "The Brain: local semantic memory over everything you've written (LM Studio embeddings, fully private)",
+                    "Brain chat: toggle the Brain icon to ask questions across your whole vault, with citation chips that jump to sources",
+                    "Inbox: quick captures are auto-filed to the right canvas by AI — every move undoable with ⌘Z",
+                    "Today panel: daily digest with resurfaced notes, stale tasks, and triage recap",
+                    "Related strip: backlinks and AI-suggested connections on every node editor",
+                    "Knowledge graph view (⌘⇧G)",
+                  ],
+                },
+                {
+                  version: "1.4",
+                  label: "",
+                  date: "June 2026",
+                  current: false,
+                  changes: [
+                    "Global search: press ⌘K to find any node across all projects and jump straight to it",
+                    "Canvas undo/redo: ⌘Z / ⇧⌘Z for node and connection changes",
+                    "AI chat responses now stream in live, with a Stop button",
+                    "Duplicate selection with ⌘D, group with ⌘G",
+                    "Alignment toolbar when multiple nodes are selected (align + distribute)",
+                    "Locked nodes now show a padlock badge",
+                  ],
+                },
+                {
+                  version: "1.3",
+                  label: "",
+                  date: "June 2026",
+                  current: false,
                   changes: [
                     "Fixed: typing mid-content in notes no longer garbles or loses text",
                     "Fixed: text in AI chat messages can now be selected and copied",
@@ -782,7 +1161,7 @@ export function SettingsPanel() {
               ))}
 
               <div style={{ fontSize: 10, color: "var(--ms-text-muted)", textAlign: "center", paddingBottom: 4, opacity: 0.6 }}>
-                MindSpace v1.3.0 · com.joshualawrence.mindspace
+                MindSpace v1.9.0 · com.joshualawrence.mindspace
               </div>
             </motion.div>
           )}

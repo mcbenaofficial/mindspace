@@ -2,7 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Handle, Position, NodeProps, Node, NodeResizer } from "@xyflow/react";
 import { useCmdKey } from "../../hooks/useCmdKey";
 import { motion } from "framer-motion";
-import { Cloud, Wind, Droplets, Trash2 } from "lucide-react";
+import {
+  Cloud, Wind, Droplets, Trash2,
+  Sun, CloudSun, CloudFog, CloudDrizzle, CloudRain, Snowflake, CloudLightning, Thermometer,
+} from "lucide-react";
 import { useStore } from "../../store";
 import { MindNode, WeatherData } from "../../types";
 
@@ -19,15 +22,15 @@ const WMO_LABEL: Record<number, string> = {
   95: "Thunderstorm", 96: "Thunderstorm w/ hail", 99: "Severe thunderstorm",
 };
 
-const WMO_EMOJI: Record<number, string> = {
-  0: "☀️",
-  1: "🌤️", 2: "⛅", 3: "☁️",
-  45: "🌫️", 48: "🌫️",
-  51: "🌦️", 53: "🌦️", 55: "🌧️",
-  61: "🌧️", 63: "🌧️", 65: "🌧️",
-  71: "❄️", 73: "❄️", 75: "❄️",
-  80: "🌦️", 81: "🌧️", 82: "⛈️",
-  95: "⛈️", 96: "⛈️", 99: "⛈️",
+const WMO_ICON: Record<number, typeof Sun> = {
+  0: Sun,
+  1: CloudSun, 2: CloudSun, 3: Cloud,
+  45: CloudFog, 48: CloudFog,
+  51: CloudDrizzle, 53: CloudDrizzle, 55: CloudRain,
+  61: CloudRain, 63: CloudRain, 65: CloudRain,
+  71: Snowflake, 73: Snowflake, 75: Snowflake,
+  80: CloudDrizzle, 81: CloudRain, 82: CloudLightning,
+  95: CloudLightning, 96: CloudLightning, 99: CloudLightning,
 };
 
 interface WeatherResult {
@@ -135,7 +138,7 @@ export function WeatherNode({ data, selected }: NodeProps<WeatherNodeType>) {
   }, [wd, mindNode.id, updateNode, fetch]);
 
   const code = result?.weathercode ?? 0;
-  const emoji = WMO_EMOJI[code] ?? "🌡️";
+  const WeatherIcon = WMO_ICON[code] ?? Thermometer;
   const label = WMO_LABEL[code] ?? "Unknown";
   const unitSym = wd.units === "celsius" ? "°C" : "°F";
 
@@ -257,7 +260,9 @@ export function WeatherNode({ data, selected }: NodeProps<WeatherNodeType>) {
         )}
         {result && (
           <>
-            <div style={{ fontSize: 44, lineHeight: 1 }}>{emoji}</div>
+            <div style={{ lineHeight: 1, display: "flex", justifyContent: "center" }}>
+              <WeatherIcon size={44} color="var(--ms-accent)" strokeWidth={1.4} />
+            </div>
             <div style={{ fontSize: 36, fontWeight: 700, color: "var(--ms-text)", lineHeight: 1, letterSpacing: "-0.02em" }}>
               {Math.round(result.temp)}{unitSym}
             </div>
