@@ -32,7 +32,8 @@ export type NodeType =
   | "bookmark-cluster"
   | "rss-reader"
   | "chart"
-  | "mental-model";
+  | "mental-model"
+  | "zen";
 
 export interface Project {
   id: string;
@@ -340,6 +341,50 @@ export interface MentalModelData {
   summary: string;                           // TipTap JSON string
 }
 
+// ─── Zen Node ────────────────────────────────────────────────────────────────
+export type ZenVariation =
+  | "pendulum"
+  | "orbits"
+  | "rain"
+  | "breath"
+  | "fireflies"
+  | "ocean";
+export type ZenScale = "maj_penta" | "min_penta" | "hirajoshi";
+export type ZenTone = "sine" | "triangle" | "kalimba";
+export type ZenBreathPreset = "478" | "box";
+
+/** A named snapshot of the full Zen settings (everything except playing state). */
+export interface ZenPreset {
+  id: string;
+  name: string;
+  settings: Omit<ZenNodeData, "presets">;
+}
+
+export interface ZenNodeData {
+  variation: ZenVariation;
+  volume: number; // 0..1 master
+  speed: number; // 0.3..1.6 time multiplier (hidden on Breathing Orb)
+  density: number; // ball/arc/drop/firefly count or spawn rate
+  scale: ZenScale;
+  rootShift: -1 | 0 | 1; // pitch shift in octaves
+  tone: ZenTone;
+  space: number; // 0..0.7 delay/reverb wet level
+  chimeLevel: number; // 0..1 melodic note gain
+  ambienceLevel: number; // 0..1 noise-bed gain (Rainfall, Ocean Swell)
+  // Breathing Orb
+  breathPreset: ZenBreathPreset;
+  padOn: boolean;
+  // Fireflies
+  chimeProbability: number; // 0..1 chance a proximity flare chimes
+  // Ocean Swell
+  swellPeriod: number; // seconds, LFO period 8..12 default
+  intensity: number; // 0..1 LFO depth
+  // Session timer
+  timerMinutes: number | null; // null = off; audio fades over the final 20s
+  presets: ZenPreset[];
+  // NOTE: playing state is intentionally NOT persisted — nodes always load paused.
+}
+
 export type NodeData =
   | NoteData
   | TaskData
@@ -374,7 +419,8 @@ export type NodeData =
   | BookmarkClusterData
   | RSSReaderData
   | ChartData
-  | MentalModelData;
+  | MentalModelData
+  | ZenNodeData;
 
 export interface VideoData {
   src: string;        // blob URL (session) or direct video URL

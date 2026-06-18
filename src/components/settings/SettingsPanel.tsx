@@ -918,10 +918,22 @@ export function SettingsPanel() {
             >
               {[
                 {
-                  version: "1.9",
+                  version: "1.10",
                   label: "Current",
                   date: "June 2026",
                   current: true,
+                  changes: [
+                    "New Zen node (Time category): a generative audio-visual calm space with fully local sound synthesis — zero assets, zero network",
+                    "Six variations: Pendulum Wave, Polyrhythm Orbits, Rainfall, Breathing Orb (4-7-8 / box breathing), Fireflies, and Ocean Swell",
+                    "Tune scale, root, tone, space, density, and ambience; save and recall presets; set a session timer that fades out and can trigger an Automation",
+                    "New Automation trigger: 'Zen session completed' — wire a finished calm session to a notification, a note, or your Pomodoro flow",
+                  ],
+                },
+                {
+                  version: "1.9",
+                  label: "",
+                  date: "June 2026",
+                  current: false,
                   changes: [
                     "Grid Opacity slider in Settings > Canvas — fade the dot grid from fully visible down to hidden",
                     "Grid Color presets that follow your theme: Subtle (default), Text, or Accent",
@@ -1161,7 +1173,7 @@ export function SettingsPanel() {
               ))}
 
               <div style={{ fontSize: 10, color: "var(--ms-text-muted)", textAlign: "center", paddingBottom: 4, opacity: 0.6 }}>
-                MindSpace v1.9.0 · com.joshualawrence.mindspace
+                MindSpace v1.10.0 · com.joshualawrence.mindspace
               </div>
             </motion.div>
           )}

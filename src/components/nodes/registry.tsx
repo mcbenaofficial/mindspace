@@ -4,7 +4,7 @@ import {
   Sparkles, BookOpen, PlayCircle, SeparatorHorizontal, TrendingUp,
   Cloud, Calculator, Group, StickyNote, AlarmClock, Hourglass,
   Globe2, ArrowLeftRight, Code2, Hash, Timer, ListChecks, Columns2,
-  BookMarked, GitBranch, Bookmark, Rss, BarChart2, Layers, Brain,
+  BookMarked, GitBranch, Bookmark, Rss, BarChart2, Layers, Brain, Waves,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { NodeType } from "../../types";
@@ -44,6 +44,8 @@ import { BookmarkClusterNode } from "./BookmarkClusterNode";
 import { RSSReaderNode } from "./RSSReaderNode";
 import { ChartNode } from "./ChartNode";
 import { MentalModelNode } from "./MentalModelNode";
+import { ZenNode } from "./ZenNode";
+import { zenDefaults } from "../../lib/zen/defaults";
 
 export type NodeCategory = "create" | "plan" | "think" | "time" | "data" | "connect";
 
@@ -184,6 +186,11 @@ export const NODE_REGISTRY: Record<NodeType, NodeDef> = {
     component: withNodeBoundary(WorldClockNode), label: "World Clock", icon: Globe2, category: "time",
     defaultSize: { width: 240, height: 320 },
     defaultData: () => ({ clocks: [{ id: "utc", label: "UTC", timezone: "UTC" }, { id: "nyc", label: "New York", timezone: "America/New_York" }, { id: "lon", label: "London", timezone: "Europe/London" }] }),
+  },
+  zen: {
+    component: withNodeBoundary(ZenNode), label: "Zen", icon: Waves, category: "time",
+    defaultSize: { width: 360, height: 420 },
+    defaultData: () => zenDefaults() as unknown as Record<string, unknown>,
   },
   // Data
   finance: {

@@ -13,6 +13,7 @@ const TRIGGER_KINDS: { kind: RuleTrigger["kind"]; label: string }[] = [
   { kind: "task-due", label: "Task is due" },
   { kind: "rss-match", label: "RSS item matches keywords" },
   { kind: "schedule", label: "Daily at a set time" },
+  { kind: "zen-session-completed", label: "Zen session completed" },
 ];
 
 const ACTION_KINDS: { kind: RuleAction["kind"]; label: string }[] = [
@@ -28,6 +29,7 @@ function triggerSummary(t: RuleTrigger): string {
     case "task-due": return t.mode === "overdue" ? "When a task is overdue" : "When a task is due today";
     case "rss-match": return `When RSS matches "${t.keywords}"`;
     case "schedule": return `Daily at ${t.time}`;
+    case "zen-session-completed": return `When a ${t.variation || "Zen"} session completes`;
   }
 }
 
@@ -113,6 +115,7 @@ export function AutomationsSection() {
     if (kind === "node-created") setTrigger({ kind, nodeType: "", canvasId: "" });
     else if (kind === "task-due") setTrigger({ kind, mode: "due-today" });
     else if (kind === "rss-match") setTrigger({ kind, keywords: "" });
+    else if (kind === "zen-session-completed") setTrigger({ kind, variation: "", canvasId: "" });
     else setTrigger({ kind: "schedule", time: "09:00" });
   };
 
@@ -220,6 +223,19 @@ export function AutomationsSection() {
           {trigger.kind === "schedule" && (
             <Field label="Time (24h)">
               <input type="time" value={trigger.time} onChange={(e) => setTrigger({ ...trigger, time: e.target.value })} style={inStyle} />
+            </Field>
+          )}
+          {trigger.kind === "zen-session-completed" && (
+            <Field label="Variation (blank = any)">
+              <select value={trigger.variation ?? ""} onChange={(e) => setTrigger({ ...trigger, variation: e.target.value as any })} style={selStyle}>
+                <option value="">Any variation</option>
+                <option value="pendulum">Pendulum Wave</option>
+                <option value="orbits">Polyrhythm Orbits</option>
+                <option value="rain">Rainfall</option>
+                <option value="breath">Breathing Orb</option>
+                <option value="fireflies">Fireflies</option>
+                <option value="ocean">Ocean Swell</option>
+              </select>
             </Field>
           )}
 

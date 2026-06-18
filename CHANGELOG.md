@@ -2,6 +2,16 @@
 
 All notable changes to MindSpace. Versions follow semantic versioning.
 
+## [v1.10.0] — 2026-06-17
+
+### Added
+- **Zen node** (Time category) — a new canvas node that renders a generative, calming audio-visual simulation on a Canvas 2D surface with fully local Web Audio synthesis. Zero assets, zero AI, zero network; runs fully offline and is the cheapest node type to run. ([request file](docs/requests/2026-06-16-zen-node.md))
+- Six variations ship at launch: **Pendulum Wave**, **Polyrhythm Orbits**, **Rainfall** (with a brown-noise bed for masking), **Breathing Orb** (4-7-8 and box-breathing, with a guided phase countdown and aria-live phase text), **Fireflies** (Perlin drift + Kuramoto sync), and **Ocean Swell** (pure LFO-driven surf, no chimes).
+- Per-node tuning: master volume, space (reverb/delay), speed, density, musical scale / root / tone (C major & A minor pentatonic, Hirajoshi; sine / triangle / kalimba), chime and ambience levels, plus per-variation controls. Save and recall named presets.
+- Session timer (Off / 10 / 25 / 45 min) that fades audio out over its final 20 seconds.
+- New Automations trigger **"Zen session completed"** (optional variation filter) — wire a finished calm session to a notification, a note, or your Pomodoro flow. No new action types.
+- Audio is gesture-gated, the shared AudioContext is created lazily and suspends when nothing is playing, audio keeps playing when a node scrolls offscreen, and canvas rendering pauses offscreen to save CPU.
+
 ## [v1.9.0] — 2026-06-12
 
 ### Added

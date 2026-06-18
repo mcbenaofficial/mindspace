@@ -7,7 +7,7 @@ import { getDb, generateId } from "../db";
 import { upsertNodeIndex } from "../search";
 import { enqueueNodeEmbedding } from "../brain/embeddings";
 import { useStore } from "../../store";
-import type { MindNode, NodeType, TaskData, RSSReaderData } from "../../types";
+import type { MindNode, NodeType, TaskData, RSSReaderData, ZenVariation } from "../../types";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -15,7 +15,8 @@ export type RuleTrigger =
   | { kind: "node-created"; nodeType?: NodeType | ""; canvasId?: string }
   | { kind: "task-due"; mode: "due-today" | "overdue" }
   | { kind: "rss-match"; keywords: string }
-  | { kind: "schedule"; time: string }; // "HH:MM", local time, fires once per day
+  | { kind: "schedule"; time: string } // "HH:MM", local time, fires once per day
+  | { kind: "zen-session-completed"; variation?: ZenVariation | ""; canvasId?: string };
 
 export type RuleAction =
   | { kind: "notify"; title?: string; body?: string }
@@ -216,6 +217,40 @@ export function notifyNodeCreated(node: MindNode): void {
       if (t.canvasId && node.canvas_id !== t.canvasId) continue;
       const title = (node.data as any)?.title || (node.data as any)?.content?.slice?.(0, 60) || node.type;
       await fire(rule, `created:${node.id}`, { nodeId: node.id, title });
+    }
+  })().catch(() => {});
+}
+
+const ZEN_VARIATION_LABELS: Record<string, string> = {
+  pendulum: "Pendulum Wave",
+  orbits: "Polyrhythm Orbits",
+  rain: "Rainfall",
+  breath: "Breathing Orb",
+  fireflies: "Fireflies",
+  ocean: "Ocean Swell",
+};
+
+/** Event hook called by the Zen Node when a session timer reaches zero. */
+export function notifyZenSessionCompleted(payload: {
+  nodeId: string;
+  canvasId: string;
+  variation: ZenVariation;
+  durationMinutes: number;
+}): void {
+  // Fire-and-forget; never block the node's UI on rule evaluation.
+  (async () => {
+    const rules = await loadRules();
+    for (const rule of rules) {
+      if (!rule.enabled || rule.trigger.kind !== "zen-session-completed") continue;
+      const t = rule.trigger;
+      if (t.variation && payload.variation !== t.variation) continue;
+      if (t.canvasId && payload.canvasId !== t.canvasId) continue;
+      const label = ZEN_VARIATION_LABELS[payload.variation] || "Zen";
+      // Unique key per completion so each session fires once.
+      await fire(rule, `zen:${payload.nodeId}:${Date.now()}`, {
+        nodeId: payload.nodeId,
+        title: `${label} session (${payload.durationMinutes} min)`,
+      });
     }
   })().catch(() => {});
 }
