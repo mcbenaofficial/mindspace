@@ -2,6 +2,17 @@
 
 All notable changes to MindSpace. Versions follow semantic versioning.
 
+## [v1.10.1] — 2026-07-28
+
+### Changed
+- Removed `AUDIT-2026-06.md` from the public repo and its full git history — it documented unpatched security gaps with exact file/line detail, which shouldn't be public on a shipping app. Kept as a local, gitignored reference. ([request file](docs/requests/2026-07-28-public-repo-privacy-audit.md))
+- Purged the maintainer's real name and personal email from the entire git history (approval ledger, metrics, weekly report, and two request docs). Future approval-ledger rows record the GitHub handle only.
+- Expanded `README.md` with a status note, a sanitized known-limitations section, and a contributing/license note for public visitors.
+- Added `.gitignore` rules for `.local/` and stray local database files as a safety net against future accidental exposure.
+
+### Fixed
+- `git clone <repository-url>` placeholder in `README.md` now points at the actual repo URL.
+
 ## [v1.10.0] — 2026-06-17
 
 ### Added
