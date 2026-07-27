@@ -42,3 +42,11 @@ __pycache__/
 .claude/settings.local.json
 .claude/harness-bypass
 worktrees/
+
+# Private local-only notes (never publish to the public repo)
+.local/
+
+# Local dev databases, should never land in the repo root
+*.sqlite
+*.sqlite3
+*.db

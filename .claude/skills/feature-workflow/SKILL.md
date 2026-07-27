@@ -52,10 +52,10 @@ On approval:
 
 1. **Record the approval — two signals, both required by the PreToolUse gate:**
    - Update **Status** to `🔵 In Progress` and add an approval line (`**Approved:** <date>`). Write the literal string `Status:** 🔵 In Progress` exactly.
-   - Append a row to `docs/requests/APPROVALS.md` (the append-only approval ledger; create it from the harness template if missing). Get the timestamp via `date -Iseconds` and the approver identity via `git config user.name` and `git config user.email` (fall back to `$USER`):
+   - Append a row to `docs/requests/APPROVALS.md` (the append-only approval ledger; create it from the harness template if missing). Get the timestamp via `date -Iseconds`. This repo is public — never write a real name or email into the ledger. Use the GitHub handle (the account portion of `git remote get-url origin`, e.g. `mcbenaofficial`) as the approver identity, falling back to `$USER` only if no remote is configured:
 
      ```markdown
-     | 2026-06-11T17:30:00+05:30 | 2026-06-11-<slug>.md | Approved | Name <email> | <optional note> |
+     | 2026-06-11T17:30:00+05:30 | 2026-06-11-<slug>.md | Approved | mcbenaofficial | <optional note> |
      ```
 
    Record `Revision Requested` or `Rejected` rows the same way when the user pushes back. NEVER append an `Approved` row without an explicit approval message from the user in this conversation — the ledger exists to audit faulty approvals.
